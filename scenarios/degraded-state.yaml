@@ -1,0 +1,14 @@
+name: degraded-session-state
+description: New or damaged Copilot state never crashes the tray or leaks event content.
+tier: 2
+target:
+  kind: cli
+  start: cargo run --quiet --bin tray-goblin-probe -- --session-root tests/fixtures/degraded-session
+setup:
+  - Create fixtures containing an unknown event, malformed JSON, and a failed tool completion with sentinel content.
+steps:
+  - action: Run the probe against the degraded fixture.
+    expect: The probe exits successfully with a content-free attention-needed status.
+  - action: Search the output for the sentinel content.
+    expect: The sentinel content is absent.
+

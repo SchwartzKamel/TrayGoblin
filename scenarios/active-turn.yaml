@@ -1,0 +1,16 @@
+name: active-turn-magic-moment
+description: A developer sees a live Copilot turn move from Working to Idle with useful context.
+tier: 1
+target:
+  kind: cli
+  start: cargo run --quiet --bin tray-goblin-probe -- --session-root tests/fixtures/live-session
+setup:
+  - Create a content-free active session fixture with workspace metadata and a model-change event.
+steps:
+  - action: Add an assistant.turn_start event and run the probe.
+    expect: The JSON snapshot reports generating, the configured model, and the fixture repository.
+  - action: Add an assistant.turn_end event two seconds later and run the probe again.
+    expect: The JSON snapshot reports idle and a last turn duration of 2000 milliseconds.
+  - action: Inspect all probe output.
+    expect: No prompt, response, tool argument, or tool result field is present.
+

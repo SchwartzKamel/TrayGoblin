@@ -1,0 +1,9 @@
+# This project consents to wgm's anonymized Hive Growth Loop.
+consent: true
+auto_report: true
+
+sources:
+  - dogfood
+  - swarm
+  - issues
+  - cross-pollinate
