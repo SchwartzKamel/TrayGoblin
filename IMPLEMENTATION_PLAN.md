@@ -2,7 +2,7 @@
 
 > Shared state for the Full-track Ralph loop. One task advances per iteration.
 
-**Current status:** no implementation task is complete. Start with T1 and advance tasks in order unless a validated discovery changes the dependency chain. Commands and fixture paths below are forward contracts created by their owning tasks.
+**Current status:** T1 is complete. Start with T2 and advance tasks in order unless a validated discovery changes the dependency chain. Commands and fixture paths below are forward contracts created by their owning tasks.
 
 ## Convergence
 - **Satisfaction threshold:** 95 — the mean holdout step score after deterministic checks pass; every tier-1 scenario must score at least 95 before tier 2 is judged, and no individual scenario may score below 90
@@ -17,8 +17,8 @@
 - **validation:** `bash scripts/validate-toolchain.sh`
 - **acceptance:** stable Rust runs a host-side test and produces a Windows x86-64 PE executable without CI; missing tools fail with actionable output
 - **scenarios/tier:** enables all scenarios
-- **status:** pending
-- **notes:** First-task toolchain proof because this docs-only repository has no validation signal.
+- **status:** done
+- **notes:** 2026-07-28 — `bash scripts/validate-toolchain.sh` exited 0: one host test passed and `target/x86_64-pc-windows-gnu/release/tray-goblin.exe` was verified as a PE32+ x86-64 executable. A PATH-isolated check also proved a missing MinGW linker fails with an installation hint. Tier-1 satisfaction is 0 (baseline; no regression): `active-turn-magic-moment` cannot run until T2–T3 create the fixture parser and `tray-goblin-probe`; dominant diagnostic `missing_bin_target`. Tier 2 was not opened because tier 1 has not converged.
 
 ### T2 — Parse content-free Copilot session metadata and events
 - **files/areas:** `src/events.rs`, `src/session.rs`, `src/status.rs`, `tests/fixtures/parser/`
@@ -74,4 +74,4 @@
 
 ## Done
 
-None yet.
+- **T1 — Establish a deterministic Rust and Windows cross-build signal** (2026-07-28): stable host test and local MinGW PE verification are green.
