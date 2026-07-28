@@ -2,4 +2,4 @@
 /dist/
 /.wgm/
 *.log
-
+/.installer-test/

@@ -2,7 +2,7 @@
 
 > Shared state for the Full-track Ralph loop. One task advances per iteration.
 
-**Current status:** T1–T4 are complete. Start with T5 and advance tasks in order unless a validated discovery changes the dependency chain. Commands and fixture paths below are forward contracts created by their owning tasks.
+**Current status:** T1–T5 are complete. Start with T6 and advance tasks in order unless a validated discovery changes the dependency chain. Commands and fixture paths below are forward contracts created by their owning tasks.
 
 ## Convergence
 - **Satisfaction threshold:** 95 — the mean holdout step score after deterministic checks pass; every tier-1 scenario must score at least 95 before tier 2 is judged, and no individual scenario may score below 90
@@ -49,8 +49,8 @@
 - **validation:** `pwsh -NoProfile -File scripts/test-installer.ps1 && bash scripts/package-release.sh 0.1.0`
 - **acceptance:** scripts require no elevation, install below LocalAppData, create/remove a Startup shortcut, preserve user configuration on uninstall by default, and produce ZIP plus SHA-256 files
 - **scenarios/tier:** makes the demo installable
-- **status:** pending
-- **notes:**
+- **status:** done
+- **notes:** 2026-07-28 — `pwsh -NoProfile -File scripts/test-installer.ps1 && bash scripts/package-release.sh 0.1.0` exited 0 with 19 checks passed and one Windows-only shortcut check explicitly skipped on Linux. Installation defaults below LocalAppData, uses an ownership marker for interruption-safe repair/removal, scopes process termination to the exact installed executable, removes Startup registration before folder work, preserves configuration by default, and removes only `config.json` on opt-in. Packaging produced a reproducible Windows x86-64 ZIP and verified SHA-256 file; `shellcheck scripts/package-release.sh` also exited 0. The performance script deterministically gates 50 MB working set and 5% normalized idle CPU; Windows measurement remains required before stable promotion.
 
 ### T6 — Document usage, privacy, architecture, and manual release operation
 - **files/areas:** `README.md`, `docs/MVP.md`, `docs/architecture.md`, `docs/manual-release.md`, `AGENTS.md`, `scripts/check-docs.sh`
@@ -78,3 +78,4 @@
 - **T2 — Parse content-free Copilot session metadata and events** (2026-07-28): parser and privacy fixture tests are green; tier-1 scoring now awaits T3's monitor and probe.
 - **T3 — Build the polling monitor, configuration, and diagnostic probe** (2026-07-28): deterministic monitor/probe tests, both holdout tiers, clippy, and the Windows cross-build are green.
 - **T4 — Implement the native Windows tray shell and actions** (2026-07-28): host tests, Windows cross-build/clippy, accessible state rendering, actions, timer scheduling, and safe error paths are green.
+- **T5 — Add per-user installation and deterministic release packaging** (2026-07-28): installer safety checks, reproducible ZIP/checksum packaging, and performance gate scripts are green.
