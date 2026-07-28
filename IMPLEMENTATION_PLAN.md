@@ -2,7 +2,7 @@
 
 > Shared state for the Full-track Ralph loop. One task advances per iteration.
 
-**Current status:** T1–T3 are complete. Start with T4 and advance tasks in order unless a validated discovery changes the dependency chain. Commands and fixture paths below are forward contracts created by their owning tasks.
+**Current status:** T1–T4 are complete. Start with T5 and advance tasks in order unless a validated discovery changes the dependency chain. Commands and fixture paths below are forward contracts created by their owning tasks.
 
 ## Convergence
 - **Satisfaction threshold:** 95 — the mean holdout step score after deterministic checks pass; every tier-1 scenario must score at least 95 before tier 2 is judged, and no individual scenario may score below 90
@@ -41,8 +41,8 @@
 - **validation:** `cargo test --workspace && cargo build --release --target x86_64-pc-windows-gnu --bin tray-goblin`
 - **acceptance:** Windows build has Idle/Working/Attention needed icons and tooltip, a 1-second timer, immediate refresh, Open in VS Code, View Copilot logs, Open settings, and Quit; action failures remain content-free
 - **scenarios/tier:** exposes tier-1 behavior through the tray
-- **status:** pending
-- **notes:**
+- **status:** done
+- **notes:** 2026-07-28 — `cargo test --workspace && cargo build --release --target x86_64-pc-windows-gnu --bin tray-goblin` exited 0 with 73 tests and a PE32+ Windows GUI executable. Host and Windows-target clippy also exited 0. The native Win32 shell now provides distinct state silhouettes and labels, bounded tooltips, configured polling with immediate refresh, the five required actions, notification-area retry after Explorer startup/restart, explicit content-free configuration/startup errors, and safe launch failure reporting. Both holdout tiers remained at 100; live Windows interaction remains the documented manual validation.
 
 ### T5 — Add per-user installation and deterministic release packaging
 - **files/areas:** `install.ps1`, `uninstall.ps1`, `scripts/test-installer.ps1`, `scripts/package-release.sh`, `scripts/measure-performance.ps1`
@@ -77,3 +77,4 @@
 - **T1 — Establish a deterministic Rust and Windows cross-build signal** (2026-07-28): stable host test and local MinGW PE verification are green.
 - **T2 — Parse content-free Copilot session metadata and events** (2026-07-28): parser and privacy fixture tests are green; tier-1 scoring now awaits T3's monitor and probe.
 - **T3 — Build the polling monitor, configuration, and diagnostic probe** (2026-07-28): deterministic monitor/probe tests, both holdout tiers, clippy, and the Windows cross-build are green.
+- **T4 — Implement the native Windows tray shell and actions** (2026-07-28): host tests, Windows cross-build/clippy, accessible state rendering, actions, timer scheduling, and safe error paths are green.
