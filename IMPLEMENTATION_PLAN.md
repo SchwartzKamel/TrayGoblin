@@ -22,7 +22,7 @@
 
 ### T2 — Parse content-free Copilot session metadata and events
 - **files/areas:** `src/events.rs`, `src/session.rs`, `src/status.rs`, `tests/fixtures/parser/`
-- **validation:** `cargo test --lib events::tests session::tests status::tests`
+- **validation:** `cargo test --lib`
 - **acceptance:** typed parsing extracts only state, timestamps, model, success, repository, and directory; unknown future event types, extra fields, and malformed lines are non-fatal; sensitive fields are never modeled; create all parser fixtures named by this task
 - **scenarios/tier:** advances `active-turn-magic-moment` tier 1 and `degraded-session-state` tier 2
 - **status:** pending
@@ -30,7 +30,7 @@
 
 ### T3 — Build the polling monitor, configuration, and diagnostic probe
 - **files/areas:** `src/monitor.rs`, `src/config.rs`, `src/bin/tray-goblin-probe.rs`, `tests/monitor.rs`, `tests/fixtures/live-session/`, `tests/fixtures/degraded-session/`
-- **validation:** `cargo test --lib monitor::tests config::tests && cargo test --test monitor`
+- **validation:** `cargo test --lib && cargo test --test monitor`
 - **acceptance:** newest active session is selected, event offsets are cached, Working/Idle/Attention needed transitions are correct, 500–10,000 ms configuration is enforced, the degraded fixture proves future-format compatibility, and the probe emits content-free JSON
 - **scenarios/tier:** completes deterministic behavior behind both scenarios
 - **status:** pending
