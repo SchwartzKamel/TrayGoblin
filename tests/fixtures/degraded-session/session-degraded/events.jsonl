@@ -1,0 +1,6 @@
+{"type":"future.event","timestamp":{"future":"shape"},"data":{"prompt":"SENSITIVE_SENTINEL"}}
+{"type":"assistant.turn_start","timestamp":"2026-07-28T08:00:00Z"}
+{"type":"session.model_change","timestamp":"2026-07-28T08:00:01Z","model":"future-model-x"}
+{"type":"tool.execution_complete","timestamp":"2026-07-28T08:00:02Z","data":{"success":false,"toolArguments":"SENSITIVE_SENTINEL"}}
+{"type":"unknown.future_kind","futureField":"unrecognized-shape"}
+{"type":"assistant.turn_end","timestamp":"2026-07-28T08:00:03Z","success":true}

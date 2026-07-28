@@ -2,7 +2,7 @@
 
 > Shared state for the Full-track Ralph loop. One task advances per iteration.
 
-**Current status:** T1–T2 are complete. Start with T3 and advance tasks in order unless a validated discovery changes the dependency chain. Commands and fixture paths below are forward contracts created by their owning tasks.
+**Current status:** T1–T3 are complete. Start with T4 and advance tasks in order unless a validated discovery changes the dependency chain. Commands and fixture paths below are forward contracts created by their owning tasks.
 
 ## Convergence
 - **Satisfaction threshold:** 95 — the mean holdout step score after deterministic checks pass; every tier-1 scenario must score at least 95 before tier 2 is judged, and no individual scenario may score below 90
@@ -33,8 +33,8 @@
 - **validation:** `cargo test --lib && cargo test --test monitor`
 - **acceptance:** newest active session is selected, event offsets are cached, Working/Idle/Attention needed transitions are correct, 500–10,000 ms configuration is enforced, the degraded fixture proves future-format compatibility, and the probe emits content-free JSON
 - **scenarios/tier:** completes deterministic behavior behind both scenarios
-- **status:** pending
-- **notes:**
+- **status:** done
+- **notes:** 2026-07-28 — `cargo test --lib && cargo test --test monitor` exited 0 with 32 tests; `cargo clippy --all-targets -- -D warnings` and `bash scripts/validate-toolchain.sh` also exited 0. The monitor selects the most recently modified active lock, caches complete JSONL offsets without losing partial writes, rebuilds state when sessions reactivate, enforces 500–10,000 ms polling, and emits an explicit content-free probe schema. Review added regressions for partial lines, timestamp-less turns, session reactivation, and stale duration removal. Tier-1 and tier-2 holdouts both scored 100 after aligning Attention needed to remain visible until the next turn starts.
 
 ### T4 — Implement the native Windows tray shell and actions
 - **files/areas:** `src/app.rs`, `src/actions.rs`, `src/icon.rs`, `src/main.rs`, `assets/`
@@ -76,3 +76,4 @@
 
 - **T1 — Establish a deterministic Rust and Windows cross-build signal** (2026-07-28): stable host test and local MinGW PE verification are green.
 - **T2 — Parse content-free Copilot session metadata and events** (2026-07-28): parser and privacy fixture tests are green; tier-1 scoring now awaits T3's monitor and probe.
+- **T3 — Build the polling monitor, configuration, and diagnostic probe** (2026-07-28): deterministic monitor/probe tests, both holdout tiers, clippy, and the Windows cross-build are green.

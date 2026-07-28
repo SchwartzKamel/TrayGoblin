@@ -10,7 +10,7 @@
 | Turn | Work bounded by `assistant.turn_start` and `assistant.turn_end` | `Turn` / **Turn** | Individual tool execution |
 | Generating | An active turn has started and has not ended | `StatusState::Generating` / **Working** | Merely having Copilot CLI open |
 | Idle | No turn is active, including when no Copilot process is active | `StatusState::Idle` / **Idle** | Disconnected or failed |
-| Error | State data is unreadable or a tool execution failed in the current turn | `StatusState::Error` / **Attention needed** | An unknown event type |
+| Error | State data is unreadable, or the latest turn had a failed tool execution and no newer turn has started | `StatusState::Error` / **Attention needed** | An unknown event type |
 | Turn latency | Wall-clock duration of the most recently completed turn | `last_turn_duration` / **Last turn** | Network time-to-first-token |
 | Status snapshot | Content-free model shown by the tray at one instant | `StatusSnapshot` | Raw Copilot event |
 
@@ -23,4 +23,3 @@
 ## Open questions
 
 None for the MVP.
-

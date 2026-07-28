@@ -1,0 +1,7 @@
+workspace:
+  repository:
+    owner: octo-org
+    name: nested-demo
+  path: C:/fixture/nested-demo
+futureMetadata:
+  shape: changed
