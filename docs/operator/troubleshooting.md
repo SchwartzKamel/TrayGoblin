@@ -114,6 +114,13 @@ The script samples the running process and exits non-zero when either budget is 
 that fails this measurement must not be promoted from preview to stable; see
 [Release responsibilities](../agent/release-responsibilities.md).
 
+## Validating a build for release
+
+If an Agent asked you to verify a release candidate, use the complete
+[Manual Windows checklist](../agent/testing.md#manual-windows-checklist), not only the symptom that
+brought you to this page. Record the Windows build number, every interaction result, and the
+performance numbers for the release handoff.
+
 ## Removing everything
 
 See the uninstall section of [Installation](installation.md). Configuration is preserved unless you

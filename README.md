@@ -15,14 +15,17 @@ or **Attention needed**, together with the model, repository, and last completed
 
 ## Project status
 
-The monitor, tray shell, installer, packaging, performance tooling, and documentation are
-implemented and validated; the final end-to-end demo assembly remains. See
-[`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) for authoritative task state.
+The deterministic MVP implementation is complete: monitor, tray shell, installer, packaging,
+performance tooling, Operator/Agent documentation, and the end-to-end release-candidate demo are
+implemented and validated. See [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) for authoritative
+task state.
 
 No release has been published from this repository yet. Until one is, build the portable archive
 yourself with `bash scripts/package-release.sh 0.1.0`. Releases are previews: Windows x86-64 only,
-per-user, unsigned, and without auto-update. The Windows performance measurement
-(`scripts/measure-performance.ps1`) must pass before promoting a preview build to stable.
+per-user, unsigned, and without auto-update. Agent-owned deterministic work is complete; the
+[Windows interaction checklist](docs/agent/testing.md#manual-windows-checklist) must pass before a
+preview is published, and `scripts/measure-performance.ps1` must pass before promoting a preview
+build to stable. See [Release responsibilities](docs/agent/release-responsibilities.md).
 
 ## Documentation
 
@@ -62,7 +65,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
 
 Then read [First run](docs/operator/first-run.md).
 
-**Agents** — on Linux, WSL, or another host with stable Rust and the MinGW-w64 x86-64 toolchain:
+**Agents** — on Linux, WSL, or another host with stable Rust and the MinGW-w64 x86-64 toolchain
+([setup instructions](docs/agent/development.md#toolchain)):
 
 ```bash
 bash scripts/validate-toolchain.sh
@@ -78,6 +82,7 @@ prints a content-free status snapshot from a fixture session. The tray itself on
 cargo test --workspace
 bash scripts/validate-toolchain.sh
 bash scripts/check-docs.sh
+bash scripts/demo.sh 0.1.0
 ```
 
 Windows interaction and the 50 MB / 5% resource budgets are verified manually with

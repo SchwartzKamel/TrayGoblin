@@ -64,13 +64,9 @@ A lightweight Windows notification-area application that displays real-time, con
 - PowerShell installer script (`install.ps1`) to set up and add to startup
 
 ## Future Enhancements
-- Token/session visualization (progress bar or gauge)  
-- Multi-CLI support with selectable active backend  
-- Custom themes (light/dark, accent colors)  
-- Desktop notifications for errors, rate limits, or disconnections  
-- Optional integration with VS Code Copilot extension state
-
-See [`specs/tray-status.md`](../specs/tray-status.md#out-of-scope-this-pass) for the authoritative MVP boundaries and follow-up list.
+See [`specs/tray-status.md`](../specs/tray-status.md#out-of-scope-this-pass) for the authoritative
+follow-up list. Keeping the list in one place prevents the product overview from drifting away from
+the executable scope.
 
 ## Tech Stack
 - Stable Rust for the monitor and native Windows tray shell
@@ -99,5 +95,6 @@ Two layers, kept distinct — see [`agent/testing.md`](agent/testing.md) for the
 - No more than 50 MB working set during normal idle operation
 - Less than 5% CPU usage while idle
 - No admin privileges required for normal use after installation
-- A manually built, checksummed Windows x86-64 preview published from a clean tagged commit, following [`manual-release.md`](manual-release.md)
+- A manually built, checksummed Windows x86-64 preview ready to publish from a clean tagged commit
+  after the Operator Windows checklist passes, following [`manual-release.md`](manual-release.md)
 - The Windows performance measurement must pass before promoting a preview build to stable

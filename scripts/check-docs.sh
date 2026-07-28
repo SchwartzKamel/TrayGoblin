@@ -18,10 +18,9 @@ readonly AGENT_LABEL="Agents"
 readonly SHARED_LABEL="Operators and Agents"
 
 # Scripts a document may reference before the task that creates them has run.
-# Each entry is owned by a task in IMPLEMENTATION_PLAN.md.
-readonly PLANNED_SCRIPTS=(
-  "scripts/demo.sh"
-)
+# Each entry is owned by a task in IMPLEMENTATION_PLAN.md. Empty: every
+# documented script now exists.
+readonly PLANNED_SCRIPTS=()
 
 readonly REQUIRED_FILES=(
   "README.md"
@@ -442,7 +441,7 @@ for script_path in ${REFERENCED_SCRIPTS[@]+"${REFERENCED_SCRIPTS[@]}"}; do
   fi
 
   planned=0
-  for candidate in "${PLANNED_SCRIPTS[@]}"; do
+  for candidate in ${PLANNED_SCRIPTS[@]+"${PLANNED_SCRIPTS[@]}"}; do
     if [[ "${candidate}" == "${script_path}" ]]; then
       planned=1
       break
@@ -483,7 +482,7 @@ else
     else
       report "documented command '${reference}' does not match Cargo.toml version '${cargo_version}'"
     fi
-  done < <(grep -ohE 'package-release\.sh [0-9]+\.[0-9]+\.[0-9]+[A-Za-z0-9.-]*' "${DOC_FILES[@]}" | LC_ALL=C sort -u || true)
+  done < <(grep -ohE '(package-release|demo)\.sh [0-9]+\.[0-9]+\.[0-9]+[A-Za-z0-9.-]*' "${DOC_FILES[@]}" | LC_ALL=C sort -u || true)
 fi
 
 # ---------------------------------------------------------------------------

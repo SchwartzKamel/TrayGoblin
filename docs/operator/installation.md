@@ -28,6 +28,9 @@ no auto-update. Two supported ways to get the archive:
 
   The archive and checksum are written to `dist/`.
 
+No pre-built release is published yet. Until the project status in
+[`README.md`](../../README.md#project-status) changes, use the build-it-yourself path above.
+
 ## 2. Verify the checksum before extracting
 
 In PowerShell, from the folder holding the downloaded files:
@@ -60,6 +63,10 @@ The installer:
 Re-running the installer is safe: it stops only the instance running from the installed path,
 replaces the files, and rewrites the shortcut.
 
+`%LOCALAPPDATA%` is your per-user program-data location; `%APPDATA%` is the separate per-user
+configuration location. The standard command uses all defaults. The options below are only for
+custom installation or testing needs.
+
 ### Installer options
 
 | Option | Effect |
@@ -78,6 +85,10 @@ contains files that TrayGoblin does not own.
 
 Look for the goblin icon in the notification area. Continue with [First run](first-run.md) to
 interpret what it shows, and see [Troubleshooting](troubleshooting.md) if no icon appears.
+
+If this archive is a release candidate, installation is only the first Operator check. Continue
+through the [Manual Windows checklist](../agent/testing.md#manual-windows-checklist), record the
+results and performance numbers, and return that evidence to the Agent preparing the release.
 
 ## Upgrading
 

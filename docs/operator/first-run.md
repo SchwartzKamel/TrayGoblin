@@ -44,13 +44,22 @@ Only lines whose values are known are shown. When no repository is available, th
 `Dir:` line with the active directory instead. See
 [Status reference](status-reference.md) for every line and state.
 
+## Release verification handoff
+
+If you are validating a build for publication, this first-run journey is release evidence rather
+than an informal smoke test. Record the date, Windows edition and build number, and pass/fail for
+each item in the [Manual Windows checklist](../agent/testing.md#manual-windows-checklist). Send that
+record and the performance numbers to the Agent preparing the release. A preview must not be
+published until the interaction checklist passes; stable promotion additionally requires the
+performance gate.
+
 ## The right-click menu
 
 | Command | What it does |
 |---|---|
 | **Refresh now** | Polls immediately instead of waiting for the next timer tick |
 | **Open in VS Code** | Opens the active Copilot directory in VS Code |
-| **View Copilot logs** | Opens the active Copilot session folder, falling back to the session folder root |
+| **View Copilot logs** | Opens the active Copilot session directory, falling back to the Session folder |
 | **Open settings** | Creates `config.json` with documented defaults if it is missing, then opens it |
 | **Quit** | Exits TrayGoblin; the Startup shortcut still launches it at your next sign-in |
 

@@ -25,6 +25,7 @@ decision, packaging, and cross-build contracts hold.
 | `bash scripts/package-release.sh 0.1.0` | Reproducible packaging, checksum generation, archive integrity, and expected entries |
 | `bash scripts/check-docs.sh` | The documentation contract: required files, audience labels, links, required commands, stale status claims, shell syntax |
 | `pwsh -NoProfile -File scripts/test-installer.ps1` | Installer and uninstaller behaviour in a sandbox profile, plus static safety checks on all PowerShell scripts |
+| `bash scripts/demo.sh 0.1.0` | The end-to-end gate: workspace tests, the Windows cross-build, both fixture journeys in tier order, reproducible packaging, and archive plus checksum verification, leaving the release candidate in `dist/` |
 
 `scripts/test-installer.ps1` reports Windows-shortcut behaviour as **skipped** on a non-Windows
 host. Skipped is not passed; those cases are covered by the manual checklist below.
@@ -50,9 +51,11 @@ Expected: `"state": "attention_needed"` with `"attention_reason": "tool_failed"`
 Malformed-line tolerance is covered by the parser fixture test. Together they are the future-format
 compatibility proof.
 
-An end-to-end demo script, `scripts/demo.sh`, is owned by task TZ in
-[`IMPLEMENTATION_PLAN.md`](../../IMPLEMENTATION_PLAN.md) and runs both journeys plus packaging in
-one command. Run the probe commands above directly until that script exists.
+`scripts/demo.sh`, owned by task TZ in [`IMPLEMENTATION_PLAN.md`](../../IMPLEMENTATION_PLAN.md),
+runs both journeys in that tier order and asserts every field above. It also asserts that the probe
+emits exactly its allow-listed fields and that no snapshot echoes the `SENSITIVE_SENTINEL` value
+planted in the degraded fixture, so removing that sentinel fails the demo rather than weakening it
+silently. Run the probe commands above directly when you want to inspect a single journey.
 
 ## What each contract test protects
 
@@ -74,6 +77,10 @@ The authoritative criterion-to-command mapping lives in
 ## Manual Windows checklist
 
 Run on Windows 10 and Windows 11, x86-64, from the packaged archive rather than a developer build.
+This checklist is the acceptance evidence for step 8 of
+[`manual-release.md`](../manual-release.md#step-8-operator-verification-on-windows). Give it to the
+Operator performing Windows verification, then collect their dated results, Windows build number,
+and performance report before publication.
 
 1. **Install without elevation** — `install.ps1` completes from a standard account, files land
    below `%LOCALAPPDATA%\Programs\TrayGoblin`, and a Startup shortcut is created.

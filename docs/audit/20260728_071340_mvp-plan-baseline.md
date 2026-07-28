@@ -39,7 +39,7 @@
 - All `IMPLEMENTATION_PLAN.md` tasks (T1–T6, TZ) are accurately marked `pending`, and privacy, performance, and release risks and their traceability to spec/scenarios are otherwise clear.
 
 ## Consolidated Agent action
-All items below are concrete documentation/spec/plan fixes with no human judgment call required, so they are classified as Agent action.
+All items below are concrete documentation/spec/plan fixes with no Operator judgment call required, so they are classified as Agent action.
 
 | # | Action | Source finding(s) | Target file(s) | Severity |
 |---|---|---|---|---|
@@ -56,7 +56,7 @@ All items below are concrete documentation/spec/plan fixes with no human judgmen
 | 11 | Confirm T6's task description/acceptance criteria in `IMPLEMENTATION_PLAN.md` explicitly enumerate `docs/architecture.md`, `docs/manual-release.md`, and `scripts/check-docs.sh` as required T6 deliverables so none is silently dropped. | Principal, PM (check-docs.sh) | `IMPLEMENTATION_PLAN.md` | AMBER |
 
 ## Consolidated Operator action
-None identified. All findings above resolve to concrete, executable documentation/spec/plan edits with no dependency on human judgment, external approval, or irreversible decisions. No item was invented to fill this section.
+None identified. All findings above resolve to concrete, executable documentation/spec/plan edits with no dependency on Operator judgment, external approval, or irreversible decisions. No item was invented to fill this section.
 
 ## Dissent
 The audit is **not unanimous**. Recorded disagreements:

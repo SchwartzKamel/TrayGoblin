@@ -2,7 +2,7 @@
 
 > Shared state for the Full-track Ralph loop. One task advances per iteration.
 
-**Current status:** T1–T6 are complete. Start with TZ and advance tasks in order unless a validated discovery changes the dependency chain. Commands and fixture paths below are forward contracts created by their owning tasks.
+**Current status:** T1–TZ are complete. The deterministic MVP release candidate is assembled; real Windows interaction and performance measurement remain operator release gates.
 
 ## Convergence
 - **Satisfaction threshold:** 95 — the mean holdout step score after deterministic checks pass; every tier-1 scenario must score at least 95 before tier 2 is judged, and no individual scenario may score below 90
@@ -65,8 +65,8 @@
 - **validation:** `bash scripts/demo.sh 0.1.0`
 - **acceptance:** host tests pass; tier-1 and tier-2 fixture journeys produce expected content-free snapshots; the Windows release build is a PE executable; package contents and checksum are correct
 - **scenarios/tier:** validates both holdout journeys in tier order
-- **status:** pending
-- **notes:**
+- **status:** done
+- **notes:** 2026-07-28 — `bash scripts/demo.sh 0.1.0` exited 0. The single command ran 73 workspace tests, verified the Windows PE32+ x86-64 build, judged the live and degraded fixture journeys in tier order against the six-field content-free probe allow-list, rebuilt the reproducible ZIP, asserted exact archive entries and packaged-executable identity, and verified the SHA-256 file. `bash scripts/check-docs.sh` and `shellcheck scripts/demo.sh` also exited 0. The release candidate remains in `dist/`; Windows tray interaction, Startup behavior, and the 50 MB / 5% performance gate remain manual Operator checks.
 
 ## Later
 - Add an official Copilot plugin or OpenTelemetry provider if the CLI publishes a stable real-time contract.
@@ -80,3 +80,4 @@
 - **T4 — Implement the native Windows tray shell and actions** (2026-07-28): host tests, Windows cross-build/clippy, accessible state rendering, actions, timer scheduling, and safe error paths are green.
 - **T5 — Add per-user installation and deterministic release packaging** (2026-07-28): installer safety checks, reproducible ZIP/checksum packaging, and performance gate scripts are green.
 - **T6 — Document usage, privacy, architecture, and manual release operation** (2026-07-28): the Operator/Agent documentation set and deterministic offline docs checker are green.
+- **TZ — Run the end-to-end demo and assemble the release candidate** (2026-07-28): the full deterministic demo produced and verified the Windows ZIP and checksum release candidate.

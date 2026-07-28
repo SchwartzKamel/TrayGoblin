@@ -19,8 +19,8 @@ itself is running — it reports whether a turn is in progress.
 
 ## How a session is selected
 
-Copilot CLI keeps one folder per session below the session folder root. A session is *active* when
-it contains an `inuse.*.lock` marker. TrayGoblin selects the session with the most recently
+Copilot CLI keeps one UUID-named session directory inside the **Session folder**. A session is
+*active* when it contains an `inuse.*.lock` marker. TrayGoblin selects the session with the most recently
 modified lock marker; if you run several Copilot sessions at once, the newest one wins and the
 others are ignored. When the selected session changes, TrayGoblin rebuilds its view of that
 session's state from the beginning of the new session's events.
