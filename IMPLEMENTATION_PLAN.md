@@ -2,7 +2,7 @@
 
 > Shared state for the Full-track Ralph loop. One task advances per iteration.
 
-**Current status:** T1–T5 are complete. Start with T6 and advance tasks in order unless a validated discovery changes the dependency chain. Commands and fixture paths below are forward contracts created by their owning tasks.
+**Current status:** T1–T6 are complete. Start with TZ and advance tasks in order unless a validated discovery changes the dependency chain. Commands and fixture paths below are forward contracts created by their owning tasks.
 
 ## Convergence
 - **Satisfaction threshold:** 95 — the mean holdout step score after deterministic checks pass; every tier-1 scenario must score at least 95 before tier 2 is judged, and no individual scenario may score below 90
@@ -57,8 +57,8 @@
 - **validation:** `bash scripts/check-docs.sh`
 - **acceptance:** `docs/architecture.md`, `docs/manual-release.md`, and `scripts/check-docs.sh` all exist and are validated; a new user can install, interpret every state, configure polling, troubleshoot Copilot format changes, and reproduce the no-CI release; docs state that Windows performance must pass before promoting preview stability
 - **scenarios/tier:** documents the complete user journey
-- **status:** pending
-- **notes:**
+- **status:** done
+- **notes:** 2026-07-28 — `bash scripts/check-docs.sh` exited 0 with 327 checks and two explicit skips for the planned TZ demo script and unavailable host `pwsh`; `cargo test --workspace` also exited 0. The documentation now has a shared index, six Operator guides, four Agent guides, architecture and reproducible manual-release references, refreshed README/MVP content, and an offline checker for audiences, links, commands, versions, task status, and shell syntax. Release instructions distinguish same-executable package determinism from cross-machine build reproducibility and include release-notes creation, abort, and rollback procedures. Root `AGENTS.md` was intentionally not edited because WGM artifact-safety requires explicit operator approval.
 
 ### TZ — Run the end-to-end demo and assemble the release candidate
 - **files/areas:** `scripts/demo.sh`, `tests/fixtures/live-session/`, `tests/fixtures/degraded-session/`, `dist/`
@@ -79,3 +79,4 @@
 - **T3 — Build the polling monitor, configuration, and diagnostic probe** (2026-07-28): deterministic monitor/probe tests, both holdout tiers, clippy, and the Windows cross-build are green.
 - **T4 — Implement the native Windows tray shell and actions** (2026-07-28): host tests, Windows cross-build/clippy, accessible state rendering, actions, timer scheduling, and safe error paths are green.
 - **T5 — Add per-user installation and deterministic release packaging** (2026-07-28): installer safety checks, reproducible ZIP/checksum packaging, and performance gate scripts are green.
+- **T6 — Document usage, privacy, architecture, and manual release operation** (2026-07-28): the Operator/Agent documentation set and deterministic offline docs checker are green.

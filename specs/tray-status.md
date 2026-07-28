@@ -23,8 +23,8 @@ A Windows developer running GitHub Copilot CLI wants to know whether Copilot is 
 
 | Criterion (EARS) | How it is verified |
 |---|---|
-| When an active session emits `assistant.turn_start`, TrayGoblin shall report Working within two polling intervals. | `cargo test --lib monitor::tests::turn_start_sets_generating` |
-| When that turn emits `assistant.turn_end`, TrayGoblin shall report Idle and the completed wall-clock duration. | `cargo test --lib monitor::tests::turn_end_sets_latency` |
+| When an active session emits `assistant.turn_start`, TrayGoblin shall report Working within two polling intervals. | `cargo test --test monitor turn_start_sets_generating` |
+| When that turn emits `assistant.turn_end`, TrayGoblin shall report Idle and the completed wall-clock duration. | `cargo test --test monitor turn_end_sets_idle_and_duration` |
 | When model metadata appears in `session.model_change` or `assistant.message`, TrayGoblin shall show the newest non-empty model name. | `cargo test --lib events::tests::tracks_latest_model` |
 | While an active session has workspace metadata, TrayGoblin shall show repository and active directory without reading conversation content. | `cargo test --lib session::tests::reads_workspace_metadata_only` |
 | If an event is unknown, malformed, or contains extra fields, then TrayGoblin shall ignore unsupported content and remain operational. | `cargo test --lib events::tests::unknown_future_event_is_non_fatal` |

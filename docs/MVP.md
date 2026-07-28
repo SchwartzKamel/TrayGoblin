@@ -1,6 +1,10 @@
 # MVP: Windows Copilot Status Bar
 
-> **Architecture decision:** The implementation uses one native Rust process rather than the original Electron/Tauri and Node.js sketch. This is the accepted decision in [`specs/adr/0001-native-rust-tray.md`](../specs/adr/0001-native-rust-tray.md), chosen to protect the memory, CPU, privacy, and manual-release constraints.
+**Audience:** Operators and Agents
+
+> **Architecture decision:** The implementation uses one native Rust process rather than the original Electron/Tauri and Node.js sketch. This is the accepted decision in [`specs/adr/0001-native-rust-tray.md`](../specs/adr/0001-native-rust-tray.md), chosen to protect the memory, CPU, privacy, and manual-release constraints. The implemented design is described in [`architecture.md`](architecture.md).
+
+This page is the product definition. For usage, read the operator guides — [Installation](operator/installation.md), [First run](operator/first-run.md), [Status reference](operator/status-reference.md), [Configuration](operator/configuration.md), [Privacy](operator/privacy.md), and [Troubleshooting](operator/troubleshooting.md) — all indexed in [`README.md`](README.md).
 
 ## Overview
 A lightweight Windows notification-area application that displays real-time, content-free status from GitHub Copilot CLI. It provides at-a-glance Copilot activity without requiring a dashboard or terminal switch.
@@ -44,10 +48,10 @@ A lightweight Windows notification-area application that displays real-time, con
   - Current model  
   - Last completed turn duration
   - Active directory or repo  
-- Auto-refresh every second by default
+- Auto-refresh every second by default (configurable 500–10,000 ms)
 - Right-click menu:
   - Refresh now
-  - Open VS Code  
+  - Open in VS Code
   - View Copilot logs
   - Open settings  
   - Quit
@@ -76,15 +80,24 @@ See [`specs/tray-status.md`](../specs/tray-status.md#out-of-scope-this-pass) for
 - ZIP plus SHA-256 checksum for preview distribution
 
 ## Testing
+
+Two layers, kept distinct — see [`agent/testing.md`](agent/testing.md) for the commands.
+
+**Deterministic, on any host with the toolchain**
 - Unit tests for session selection, parsing, configuration, state transitions, actions, and privacy boundaries
-- Content-free Copilot session fixtures for offline testing
+- Content-free Copilot session fixtures for offline testing, including a degraded future-format fixture
 - Cross-build validation that produces a Windows PE executable
-- Manual tray interaction tests on Windows 10 and Windows 11  
-- Scripted pass/fail checks for CPU and memory usage
+- Reproducible packaging with checksum verification
+- Documentation validation through `bash scripts/check-docs.sh`
+
+**Manual, on Windows 10 and Windows 11 only**
+- Tray icon appearance, tooltip rendering, menu commands, and startup registration
+- Scripted pass/fail measurement of CPU and memory usage with `scripts/measure-performance.ps1`
 
 ## Success Criteria
 - Tray icon updates within 2 seconds of Copilot CLI state change  
 - No more than 50 MB working set during normal idle operation
 - Less than 5% CPU usage while idle
 - No admin privileges required for normal use after installation
-- A manually built, checksummed Windows x86-64 preview published from a clean tagged commit
+- A manually built, checksummed Windows x86-64 preview published from a clean tagged commit, following [`manual-release.md`](manual-release.md)
+- The Windows performance measurement must pass before promoting a preview build to stable
