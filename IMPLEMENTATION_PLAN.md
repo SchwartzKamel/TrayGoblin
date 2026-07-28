@@ -2,7 +2,7 @@
 
 > Shared state for the Full-track Ralph loop. One task advances per iteration.
 
-**Current status:** T1 is complete. Start with T2 and advance tasks in order unless a validated discovery changes the dependency chain. Commands and fixture paths below are forward contracts created by their owning tasks.
+**Current status:** T1–T2 are complete. Start with T3 and advance tasks in order unless a validated discovery changes the dependency chain. Commands and fixture paths below are forward contracts created by their owning tasks.
 
 ## Convergence
 - **Satisfaction threshold:** 95 — the mean holdout step score after deterministic checks pass; every tier-1 scenario must score at least 95 before tier 2 is judged, and no individual scenario may score below 90
@@ -25,8 +25,8 @@
 - **validation:** `cargo test --lib`
 - **acceptance:** typed parsing extracts only state, timestamps, model, success, repository, and directory; unknown future event types, extra fields, and malformed lines are non-fatal; sensitive fields are never modeled; create all parser fixtures named by this task
 - **scenarios/tier:** advances `active-turn-magic-moment` tier 1 and `degraded-session-state` tier 2
-- **status:** pending
-- **notes:**
+- **status:** done
+- **notes:** 2026-07-28 — `cargo test --lib` exited 0 with 10 tests. Typed parsers now retain only event kind, RFC 3339 timestamp, model, success, repository, and active directory; synthetic fixtures prove unknown event types, extra fields, malformed lines, nested workspace metadata, and sensitive-field exclusion remain non-fatal and content-free. Tier-1 `active-turn-magic-moment` satisfaction improved 0→16.7 with no regression; the expected `missing_bin_target` diagnostic remains because T3 owns snapshot assembly, the live-session fixture, and `tray-goblin-probe`. Tier 2 was not opened because tier 1 has not converged.
 
 ### T3 — Build the polling monitor, configuration, and diagnostic probe
 - **files/areas:** `src/monitor.rs`, `src/config.rs`, `src/bin/tray-goblin-probe.rs`, `tests/monitor.rs`, `tests/fixtures/live-session/`, `tests/fixtures/degraded-session/`
@@ -75,3 +75,4 @@
 ## Done
 
 - **T1 — Establish a deterministic Rust and Windows cross-build signal** (2026-07-28): stable host test and local MinGW PE verification are green.
+- **T2 — Parse content-free Copilot session metadata and events** (2026-07-28): parser and privacy fixture tests are green; tier-1 scoring now awaits T3's monitor and probe.

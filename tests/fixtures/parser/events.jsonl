@@ -1,0 +1,6 @@
+{"type":"assistant.turn_start","timestamp":"2026-07-28T07:20:00Z","prompt":"SENSITIVE_SENTINEL","data":{"requestId":"fixture-request"}}
+{"type":"session.model_change","timestamp":"2026-07-28T07:20:01Z","model":"gpt-5.4-mini","credential":"SENSITIVE_SENTINEL"}
+{"type":"assistant.message","timestamp":"2026-07-28T07:20:02Z","data":{"model":"  gpt-5.6-sol  ","assistantContent":"SENSITIVE_SENTINEL","tokens":999}}
+{"type":"tool.execution_complete","timestamp":"2026-07-28T07:20:03Z","data":{"success":false,"toolArguments":"SENSITIVE_SENTINEL","toolResult":"SENSITIVE_SENTINEL"}}
+{"type":"assistant.turn_end","timestamp":"2026-07-28T07:20:04Z","success":true,"repositoryFileContents":"SENSITIVE_SENTINEL"}
+{"type":"future.event","timestamp":{"future":"shape"},"data":{"prompt":"SENSITIVE_SENTINEL"}}

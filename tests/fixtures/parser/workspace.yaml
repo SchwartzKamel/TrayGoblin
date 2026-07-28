@@ -1,0 +1,8 @@
+repository:
+  owner: octo-org
+  name: content-free-demo
+cwd: C:/fixture/content-free-demo
+prompt: SENSITIVE_SENTINEL
+credential: SENSITIVE_SENTINEL
+futureMetadata:
+  repositoryFileContents: SENSITIVE_SENTINEL

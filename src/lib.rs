@@ -1,3 +1,7 @@
+pub mod events;
+pub mod session;
+pub mod status;
+
 pub const APPLICATION_NAME: &str = "TrayGoblin";
 
 #[cfg(test)]
