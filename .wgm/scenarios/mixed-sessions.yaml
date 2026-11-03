@@ -1,0 +1,15 @@
+name: mixed-windows-wsl-sessions
+description: Many pi and Copilot sessions remain distinguishable without guessing unsupported input state.
+tier: 2
+target:
+  kind: cli
+  start: cargo test --test attention_monitor --test attention_controller
+setup:
+  - Use content-free sources labeled Windows and WSL, including same-directory sessions.
+steps:
+  - action: Observe a mixed 64-session workload with repeated polling and concurrent attention transitions.
+    expect: Session identities remain distinct; episodes deduplicate; a burst coalesces without hiding outstanding sessions.
+  - action: Start with historical Copilot errors, then append a new session error and a failed-tool-only control.
+    expect: Only the new session.error is notification-eligible; historical errors and failed tools alone do not trigger alerts.
+  - action: Inspect provider capabilities and the default legacy probe.
+    expect: Copilot input detection is explicitly unavailable, pi has explicit input detection, and the original probe retains exactly its six content-free fields.

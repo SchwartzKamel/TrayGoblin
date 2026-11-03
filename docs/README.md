@@ -75,7 +75,10 @@ agent responsibility, the page says who does what.
 | [`specs/CONTEXT.md`](../specs/CONTEXT.md) | Canonical vocabulary for states and session terms |
 | [`specs/tray-status.md`](../specs/tray-status.md) | Executable acceptance criteria and their verifying commands |
 | [`specs/adr/0001-native-rust-tray.md`](../specs/adr/0001-native-rust-tray.md) | Accepted architecture decision |
-| [`IMPLEMENTATION_PLAN.md`](../IMPLEMENTATION_PLAN.md) | Ordered task list and current task status |
+| [`IMPLEMENTATION_PLAN.md`](../IMPLEMENTATION_PLAN.md) | Historical completed MVP tasks |
+| [Attention follow-up plan](../.wgm/IMPLEMENTATION_PLAN.md) | Planned, not shipped: pi/Copilot multibox attention work; M6 owes actual Windows/WSL field validation |
+| [Attention spec](../.wgm/specs/session-attention.md) | Follow-up behavior, defaults, limitations, and exact validation boundaries |
+| [Attention glossary](../.wgm/specs/CONTEXT.md) | Follow-up source, instance, and episode vocabulary |
 | [`AGENTS.md`](../AGENTS.md) | Lean build and validation command sheet |
 
 Validate this documentation set with:

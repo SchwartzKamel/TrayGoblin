@@ -1,0 +1,13 @@
+name: attention-source-recovery
+description: Crashed publishers and unavailable WSL sources cannot freeze or mislead the attention radar.
+tier: 3
+target:
+  kind: cli
+  start: cargo test --test attention_monitor --test attention_controller
+steps:
+  - action: Stall one source worker while a different source publishes an input episode.
+    expect: The unaffected source continues promptly, the consumer/UI-facing call does not block, and queued snapshots remain bounded.
+  - action: Publish partial, malformed, oversized, and stale pi status; shut down or replace its publisher.
+    expect: Each condition degrades visibly without content leaks or a false input alert; old instances cannot resurrect as fresh sessions.
+  - action: Recover the source and reject one native notification submission before accepting a retry.
+    expect: Fresh sessions reappear; undelivered episodes remain eligible until accepted; successful retry does not create further duplicate alerts.

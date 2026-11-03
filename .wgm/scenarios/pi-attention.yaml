@@ -1,0 +1,15 @@
+name: pi-attention-radar
+description: A running pi session needs input while another works; completion stays quiet.
+tier: 1
+target:
+  kind: cli
+  start: bash scripts/demo-attention.sh
+setup:
+  - Use synthetic offline pi sessions loaded through the shipped integration and real pinned host.
+steps:
+  - action: Run two distinct sessions in one directory and make one wait on a delayed blocking confirmation during work.
+    expect: Only the waiting session gains one attributed input episode; the other remains Working, and no prompt/title/body content is published.
+  - action: Poll again without answering, then resolve the confirmation and complete successfully.
+    expect: No repeated notification is eligible; attention clears, and successful completion produces no notification.
+  - action: Settle a new run with an error after a recoverable tool failure control.
+    expect: The recovered tool failure control stays quiet; final run error produces one distinct attributed attention episode.

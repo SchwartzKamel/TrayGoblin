@@ -1,5 +1,12 @@
 /target/
 /dist/
-/.wgm/
+/.wgm/*
+!/.wgm/IMPLEMENTATION_PLAN.md
+!/.wgm/AGENTS.md
+!/.wgm/specs/
+!/.wgm/scenarios/
+!/.wgm/docs/
+/.wgm/docs/*
+!/.wgm/docs/audit/
 *.log
 /.installer-test/

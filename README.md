@@ -18,7 +18,13 @@ or **Attention needed**, together with the model, repository, and last completed
 The deterministic MVP implementation is complete: monitor, tray shell, installer, packaging,
 performance tooling, Operator/Agent documentation, and the end-to-end release-candidate demo are
 implemented and validated. See [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) for authoritative
-task state.
+historical MVP task state.
+
+**Planned follow-up, not shipped:** multi-session pi/Copilot attention alerts for Windows and WSL.
+The [follow-up plan](.wgm/IMPLEMENTATION_PLAN.md), [attention spec](.wgm/specs/session-attention.md),
+and [glossary](.wgm/specs/CONTEXT.md) govern that work. Pi input/error alerts and Copilot error-only
+alerts are planned; successful completion stays quiet. Actual Windows/WSL interaction and resource
+measurements remain blocked on Operator validation (M6), not proven by a Linux cross-build.
 
 No release has been published from this repository yet. Until one is, build the portable archive
 yourself with `bash scripts/package-release.sh 0.1.0`. Releases are previews: Windows x86-64 only,
