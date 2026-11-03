@@ -13,9 +13,10 @@ Simplicity and effectiveness take priority over dashboards and remote control.
 - One native Windows tray is the notification hub for Windows and local WSL.
 - Pi uses an approved, opt-in extension inside the existing pi process. It writes
   tiny content-free local status files; no daemon, server, or telemetry collector.
-- Pi: alert for explicit blocking extension UI during agent work and final run
-  errors. Do not treat successful completion, ordinary Idle, manual cancellation,
-  or recoverable tool errors as attention alerts.
+- Pi: alert for every explicit blocking extension dialog, including manual,
+  settings, and compaction dialogs, plus final run errors. The user explicitly
+  approved this policy on 2026-11-03. Successful completion, ordinary Idle, run
+  cancellation, and recoverable tool errors do not themselves create alerts.
 - Copilot: alert for new persisted `session.error` events only. Input detection is
   explicitly unavailable: its permission/input/elicitation events are ephemeral
   and not present in the passive event-log boundary. Never guess from a timeout.
@@ -68,15 +69,24 @@ Simplicity and effectiveness take priority over dashboards and remote control.
   Configured UNC reads may wake WSL; removing that source and restarting TrayGoblin
   disables those reads. M6 records the target host's actual shutdown behavior.
 - Pi status protocol v1: explicit allow-listed scalars, stable session/instance
-  identity, monotonic attention-episode number, heartbeat timestamp, and state.
+  identity, unique attention-episode ID, heartbeat timestamp, and state. IDs are
+  allocated from a monotonic counter; restoring a pre-existing error after a
+  dialog restores its original ID, not a new error episode. Consumers must not
+  treat a lower restored ID as a stale publication; freshness is timestamp/instance.
   Max file size 16 KiB, strings bounded, filenames independent of content.
   Write atomically, serialize writes, heartbeat every 2 seconds, mark stale after
   10 seconds, clean up idempotently at shutdown/reload/session replacement.
   A stopped/crashed publisher is unavailable, not falsely Working or input-waiting.
-- Observe `ui_prompt_start/end` without reading titles. Track only dialogs during
-  an active run. Observe boundary `outcome` without touching messages, results,
+- Observe `ui_prompt_start/end` without reading titles or inferring agent activity
+  from `ctx.isIdle()`. Dialog attention overlays the independently observed
+  Idle/Working/Error state; closing/rejecting restores that stable state, including
+  the same pre-existing error identity. UI events must never fabricate a run or
+  clear an error. Observe boundary `outcome` without touching messages, results,
   context entries, history, credentials, or tokens; only final settlement produces
-  a terminal-error episode. Nested/dialog rejection paths must clear waiting.
+  a terminal-error episode. Handle end-before-start delivery without resurrecting
+  closed input state. Tests use actual asynchronous earlier observers, not only
+  delayed filesystem writes. Upstream extension callbacks can delay hook delivery;
+  observation latency starts at delivered hooks, not an inaccessible UI timestamp.
 - Multi-session Copilot monitoring keeps independent offsets/turn state per active
   lock-directory. Existing historical events initialize state without notification
   replay. New `session.error` records create episodes; tool failures alone do not.
@@ -106,14 +116,15 @@ Simplicity and effectiveness take priority over dashboards and remote control.
 - Error clearing is explicit: a new pi run clears its previous final error; a
   new Copilot `assistant.turn_start` clears its previous session error. Normal
   Idle/heartbeat and notification submission/acknowledgement never clear errors.
-  UI prompt end clears only that input episode and resumes Working if the run is
-  active. A fresh successful/aborted run is Idle without attention. Session
+  UI prompt end clears only the dialog overlay and restores the independently
+  observed state (Idle, Working, or the same error ID). A fresh successful/aborted
+  run is Idle without attention unless an explicit dialog still remains open. Session
   shutdown/removal ends visibility and drops pending alerts for that instance;
   replacement gets a distinct identity and never inherits an old error/episode.
   These conventional recovery defaults require no new operator setting. Test
   idle persistence, new-work clear, abort/success, replacement and episode renewal.
-- Fresh input/error state and clearing are observed within two polling intervals
-  plus 500 ms; heartbeat/source staleness clears input visibility after 10 seconds
+- After the publisher receives the relevant lifecycle hook, fresh input/error
+  state and clearing are observed within two polling intervals plus 500 ms; heartbeat/source staleness clears input visibility after 10 seconds
   plus two intervals. Test with injected clock, not long wall-clock sleeps.
 - Publisher close is an ordered barrier: pending writes complete before its own
   file is removed; later writes are rejected. Test injected write/rename/delete
@@ -151,7 +162,7 @@ Simplicity and effectiveness take priority over dashboards and remote control.
 
 | ID | EARS requirement | Command / evidence tier |
 |---|---|---|
-| R1 ADDED | When pi waits on a blocking extension dialog during a run, the extension shall publish a content-free input episode and clear it after resolve/reject. | `node --test tests/pi-status.test.mjs tests/pi-host.test.mjs` — real installed pi 1.4.0 loader/runner, offline |
+| R1 ADDED | When pi opens any explicit blocking extension dialog, including manual/compaction dialogs, the extension shall publish a content-free input episode, restore prior state on resolve/reject, and not resurrect input after end-before-start delivery. | `node --test tests/pi-status.test.mjs tests/pi-host.test.mjs` — real installed pi 1.4.0 loader/runner, offline |
 | R2 ADDED | When pi settles after an error, the extension shall publish one error episode; successful settlement, abort, and recovered tool errors shall remain quiet. | Same node command; delayed/rejected UI and continuation cases through pinned host |
 | R3 ADDED | When publishing, the extension shall write bounded atomic status, heartbeat while alive, and remove only its own file on shutdown/reload. | Same node command; sensitive-field getters throw if accessed, cleanup and concurrent-write assertions |
 | R4 ADDED | While several sources/sessions are active, the monitor shall preserve independent identities/state/offsets and explicitly state provider input-detection capability. | `cargo test --workspace` — `tests/attention_monitor.rs` and config/parser tests |
@@ -194,13 +205,11 @@ Simplicity and effectiveness take priority over dashboards and remote control.
   tool argument/result capture, token/cost accounting, credentials, repository file
   contents, terminal scraping/focus/control, remote SSH, auto-update, or Linux GUI.
 
-## Blocking implementation discovery (not an approved scope change)
-M1's24-test suite passes, but independent actual-host review disproves its inferred
-active-run predicate and UI dispatch-order assumptions. `ctx.isIdle()` is also
-false for standalone compaction/summarization; delayed earlier UI observers can
-invert start/end delivery to this extension. M1 is blocked; no acceptance test is
-waived or weakened. The current stricter agent-run-only requirement remains in
-force until the user decides whether all explicit blocking pi dialogs may alert,
-including manual dialogs, with prior state restored after closure. This simpler
-policy is recommended, but event-order recovery still needs its own real-host
-counterexample/regression. See plan M1.R3 and `.wgm/rugged/M1-current.md`.
+## Approved implementation correction
+Independent real-host review disproved generic-busy activity inference and ordered
+UI delivery in the initial24-test implementation. The user approved all explicit
+blocking pi dialogs (including manual ones), with prior state restored on close.
+Only acceptance assertions that required idle dialogs to remain invisible are
+superseded by this explicit authorization; privacy, quiet ordinary Idle/completion,
+startup recovery, and event-order safeguards remain mandatory. M1.R3 must prove
+new real-host regressions fail on `c67522b` and pass after the correction.

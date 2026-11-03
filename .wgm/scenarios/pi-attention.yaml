@@ -13,3 +13,7 @@ steps:
     expect: No repeated notification is eligible; attention clears, and successful completion produces no notification.
   - action: Settle a new run with an error after a recoverable tool failure control.
     expect: The recovered tool failure control stays quiet; final run error produces one distinct attributed attention episode.
+  - action: Open and close a manual pi dialog while a previous session error remains outstanding.
+    expect: Input attention appears for the explicit dialog; closure restores the same error identity without inventing Working or notifying again for the old error.
+  - action: Delay an earlier extension's dialog-start observer until after the confirmation closes, then let all hooks finish.
+    expect: The closed dialog does not remain or resurrect as outstanding input; the stable session state and sensitive-field exclusions remain intact.

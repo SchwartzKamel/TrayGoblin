@@ -9,7 +9,7 @@
 | Provider | Agent CLI family, not the model vendor | `pi` or `copilot` |
 | Session instance | One live publisher/runtime, distinct even for the same directory/session | Session instance |
 | Attention episode | A new explicit input requirement or supported terminal error, with stable identity for deduplication | Attention episode |
-| Input required | Supported explicit blocking UI during agent work; not inferred from idle time | Input required |
+| Input required | Any explicit blocking pi UI, including manual dialogs; not inferred from idle time | Input required |
 | Terminal error | Final pi run error or new persisted Copilot session.error, not a failed tool that the agent recovers from | Session error |
 | Unavailable | Stale publisher or unreadable/stalled source; not proof of an agent input request | Unavailable |
 | Quiet completion | Successful completion without notification | Idle |
