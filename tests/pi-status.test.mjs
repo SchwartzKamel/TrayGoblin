@@ -7,12 +7,13 @@ import {
   createStatusPublisher,
   HEARTBEAT_MS,
   MAX_STATUS_BYTES,
+  MAX_PENDING_WRITES,
   statusDirectory,
 } from "../integrations/pi/tray-goblin.js";
 
 const keys = [
   "version", "provider", "sessionId", "instanceId", "model", "directory",
-  "state", "episode", "updatedAt", "runStartedAt", "lastRunDurationMs",
+  "state", "attentionReason", "episode", "updatedAt", "runStartedAt", "lastRunDurationMs",
 ].sort();
 
 function deferred() {
@@ -95,6 +96,7 @@ test("fixed bounded schema contains only approved metadata", async (t) => {
   assert.doesNotMatch(status.directory, /[\u0000-\u001f]/u);
   assert.match(status.instanceId, /^[0-9a-f-]{36}$/);
   assert.equal(status.state, "idle");
+  assert.equal(status.attentionReason, null);
   assert.equal(status.episode, 0);
   assert.equal(status.updatedAt, 10000);
   assert.equal(status.runStartedAt, null);
@@ -102,54 +104,78 @@ test("fixed bounded schema contains only approved metadata", async (t) => {
   assert.equal((await fs.readdir(join(f.root, "status"))).length, 1);
 });
 
-// Explicit dialogs, not idle UI or tool failures, own input attention episodes.
-test("nested input episodes clear on the final dialog end", async (t) => {
+// Pi coalesces nested dialogs; duplicated interval starts are ambiguous and must latch one fault.
+test("overlapping starts latch a stable tracking fault instead of guessing nested UI", async (t) => {
   const f = await fixture(t);
   await f.publisher.start();
   await f.publisher.promptStart();
+  assert.equal((await f.read()).state, "input_required");
+  assert.equal((await f.read()).episode, 1);
+  await f.publisher.promptEnd();
   assert.equal((await f.read()).state, "idle");
   await f.publisher.beginRun();
   await f.publisher.promptStart();
   const first = await f.read();
   assert.equal(first.state, "input_required");
-  assert.equal(first.episode, 1);
+  assert.equal(first.episode, 2);
   await f.publisher.promptStart();
+  const fault = await f.read();
+  assert.equal(fault.state, "error");
+  assert.equal(fault.attentionReason, "ui_tracking_unavailable");
+  assert.equal(fault.episode, 3);
   await f.publisher.promptEnd();
-  assert.equal((await f.read()).state, "input_required");
+  assert.equal((await f.read()).state, "error");
+  assert.equal((await f.read()).attentionReason, "ui_tracking_unavailable");
+  assert.equal((await f.read()).episode, fault.episode);
   await f.publisher.promptEnd();
-  assert.equal((await f.read()).state, "working");
+  assert.equal((await f.read()).state, "error");
+  assert.equal((await f.read()).attentionReason, "ui_tracking_unavailable");
+  assert.equal((await f.read()).episode, fault.episode);
   await f.publisher.promptStart();
-  assert.equal((await f.read()).episode, 2);
+  assert.equal((await f.read()).episode, fault.episode);
   await f.publisher.promptEnd();
 });
 
-// Content-free host busy state recognizes startup UI before this extension's run handler.
-test("host busy metadata promotes early input but idle dialogs remain quiet", async (t) => {
+// Manual dialogs never infer a run, and restoring an error must preserve its notification identity.
+test("manual input overlays idle and error without fabricating work", async (t) => {
   const f = await fixture(t);
   await f.publisher.start();
-  await f.publisher.promptStart(false);
+  await f.publisher.promptStart();
+  assert.equal((await f.read()).state, "input_required");
+  assert.equal((await f.read()).attentionReason, null);
+  assert.equal((await f.read()).episode, 1);
   await f.publisher.promptEnd();
   assert.equal((await f.read()).state, "idle");
   assert.equal((await f.read()).runStartedAt, null);
-  assert.equal((await f.read()).episode, 0);
-  await f.publisher.promptStart(true);
+  assert.equal((await f.read()).episode, 1);
+  await f.publisher.promptStart();
   const input = await f.read();
   assert.equal(input.state, "input_required");
-  assert.equal(input.episode, 1);
-  assert.equal(input.runStartedAt, 10000);
+  assert.equal(input.episode, 2);
+  assert.equal(input.runStartedAt, null);
   f.setClock(10500);
   await f.publisher.beginRun();
   assert.equal((await f.read()).state, "input_required");
-  assert.equal((await f.read()).runStartedAt, input.runStartedAt);
+  assert.equal((await f.read()).runStartedAt, 10500);
   await f.publisher.promptEnd();
   assert.equal((await f.read()).state, "working");
   f.publisher.beforeSettle("error");
+  f.setClock(11000);
   await f.publisher.settle(false);
-  await f.publisher.promptStart(false);
+  const failed = await f.read();
+  assert.equal(failed.episode, 3);
+  assert.equal(failed.attentionReason, "run_error");
+  await f.publisher.promptStart();
+  assert.equal((await f.read()).episode, 4);
   await f.publisher.promptEnd();
   assert.equal((await f.read()).state, "error");
-  assert.equal((await f.read()).episode, 2);
+  assert.equal((await f.read()).attentionReason, "run_error");
+  assert.equal((await f.read()).episode, failed.episode);
   assert.equal((await f.read()).lastRunDurationMs, 500);
+  await f.publisher.promptStart();
+  assert.equal((await f.read()).episode, 5);
+  await f.publisher.promptEnd();
+  assert.equal((await f.read()).episode, failed.episode);
 });
 
 // Prompt state must update before awaiting I/O, or fast-end can race startup and stick waiting.
@@ -173,15 +199,115 @@ test("early prompt start and end stay synchronous across delayed publication", a
   });
   await f.publisher.start();
   delayed = true;
-  const starting = f.publisher.promptStart(true);
+  const starting = f.publisher.promptStart();
   await entered.promise;
   const ending = f.publisher.promptEnd();
   const runHandler = f.publisher.beginRun();
   release.resolve();
   await Promise.all([starting, ending, runHandler]);
-  assert.deepEqual(snapshots, ["idle", "input_required", "working", "working"]);
+  assert.deepEqual(snapshots, ["idle", "input_required", "idle", "working"]);
   assert.equal((await f.read()).state, "working");
   assert.equal((await f.read()).episode, 1);
+});
+
+// Every three-dialog ordering is checked: coherent intervals restore; ambiguity latches one typed fault.
+test("all balanced three-dialog permutations preserve healthy state or one stable tracking fault", async (t) => {
+  const orders = [];
+  function enumerate(order, starts, ends) {
+    if (starts === 3 && ends === 3) orders.push(order);
+    if (starts < 3) enumerate([...order, "start"], starts + 1, ends);
+    if (ends < 3) enumerate([...order, "end"], starts, ends + 1);
+  }
+  enumerate([], 0, 0);
+  assert.equal(orders.length, 20);
+  for (const underlying of ["idle", "working", "error"]) {
+    for (const order of orders) {
+      const f = await fixture(t);
+      await f.publisher.start();
+      if (underlying !== "idle") await f.publisher.beginRun();
+      if (underlying === "error") {
+        f.publisher.beforeSettle("error");
+        await f.publisher.settle(false);
+      }
+      const original = await f.read();
+      let allocated = original.episode;
+      let open = false;
+      let faultEpisode;
+      for (const delivery of order) {
+        if (faultEpisode === undefined) {
+          if ((delivery === "start") === open) faultEpisode = ++allocated;
+          else {
+            open = !open;
+            if (open) allocated++;
+          }
+        }
+        await f.publisher[delivery === "start" ? "promptStart" : "promptEnd"]();
+        const value = await f.read();
+        assert.deepEqual(Object.keys(value).sort(), keys);
+        assert.equal(value.state, faultEpisode !== undefined ? "error" : open ? "input_required" : underlying);
+        assert.equal(value.attentionReason, faultEpisode !== undefined
+          ? "ui_tracking_unavailable" : !open && underlying === "error" ? "run_error" : null);
+        assert.equal(value.runStartedAt, original.runStartedAt);
+        assert.equal(value.lastRunDurationMs, original.lastRunDurationMs);
+        if (faultEpisode !== undefined) assert.equal(value.episode, faultEpisode);
+        else if (open) assert.equal(value.episode, allocated);
+        else if (underlying === "error") assert.equal(value.episode, original.episode);
+      }
+      await f.publisher.promptStart();
+      assert.equal((await f.read()).episode, faultEpisode ?? allocated + 1);
+      assert.equal((await f.read()).attentionReason, faultEpisode === undefined ? null : "ui_tracking_unavailable");
+      await f.publisher.promptEnd();
+      assert.equal((await f.read()).state, faultEpisode === undefined ? underlying : "error");
+      assert.equal((await f.read()).attentionReason, faultEpisode !== undefined
+        ? "ui_tracking_unavailable" : underlying === "error" ? "run_error" : null);
+    }
+  }
+});
+
+// Settlement preserves a coherent overlay, but ambiguous end ordering stays a monitoring error until reload.
+test("settlement preserves open dialogs and cannot clear or renew a latched tracking fault", async (t) => {
+  const f = await fixture(t);
+  await f.publisher.start();
+  await f.publisher.beginRun();
+  await f.publisher.promptStart();
+  f.publisher.beforeSettle("error");
+  await f.publisher.settle(false);
+  assert.equal((await f.read()).state, "input_required");
+  assert.equal((await f.read()).episode, 1);
+  await f.publisher.promptEnd();
+  assert.equal((await f.read()).state, "error");
+  assert.equal((await f.read()).episode, 2);
+  assert.equal((await f.read()).attentionReason, "run_error");
+  await f.publisher.promptEnd();
+  const fault = await f.read();
+  assert.equal(fault.state, "error");
+  assert.equal(fault.attentionReason, "ui_tracking_unavailable");
+  assert.equal(fault.episode, 3);
+  await f.publisher.beginRun();
+  assert.equal((await f.read()).state, "error");
+  assert.equal((await f.read()).attentionReason, "ui_tracking_unavailable");
+  assert.equal((await f.read()).episode, fault.episode);
+  f.publisher.beforeSettle("completed");
+  await f.publisher.settle(false);
+  await f.publisher.promptStart();
+  assert.equal((await f.read()).state, "error");
+  assert.equal((await f.read()).attentionReason, "ui_tracking_unavailable");
+  assert.equal((await f.read()).episode, fault.episode);
+  await f.publisher.promptStart();
+  await f.publisher.beginRun();
+  f.publisher.beforeSettle("aborted");
+  await f.publisher.settle(false);
+  assert.equal((await f.read()).state, "error");
+  assert.equal((await f.read()).attentionReason, "ui_tracking_unavailable");
+  assert.equal((await f.read()).episode, fault.episode);
+  await f.publisher.promptEnd();
+  f.setClock(12000);
+  f.tick();
+  await f.publisher.publish();
+  assert.equal((await f.read()).updatedAt, 12000);
+  assert.equal((await f.read()).state, "error");
+  assert.equal((await f.read()).attentionReason, "ui_tracking_unavailable");
+  assert.equal((await f.read()).episode, fault.episode);
 });
 
 // Tentative errors cannot alert until settlement; new work clears persistent errors.
@@ -195,6 +321,7 @@ test("settlement, error persistence, recovery, success and abort", async (t) => 
   await f.publisher.settle(false);
   const failed = await f.read();
   assert.equal(failed.state, "error");
+  assert.equal(failed.attentionReason, "run_error");
   assert.equal(failed.episode, 1);
   assert.equal(failed.runStartedAt, null);
   assert.equal(failed.lastRunDurationMs, 500);
@@ -204,6 +331,7 @@ test("settlement, error persistence, recovery, success and abort", async (t) => 
   assert.equal((await f.read()).episode, 1);
   await f.publisher.beginRun();
   assert.equal((await f.read()).state, "working");
+  assert.equal((await f.read()).attentionReason, null);
   f.publisher.beforeSettle("error");
   await f.publisher.beginRun();
   f.publisher.beforeSettle("completed");
@@ -331,6 +459,96 @@ test("atomic serialized writes and pending-write shutdown barrier", async (t) =>
   assert.deepEqual(operations, ["write", "rename", "write", "rename", "write", "rename", "delete"]);
   await assert.rejects(fs.stat(f.publisher.path), { code: "ENOENT" });
 });
+
+// A blocked filesystem retains exactly 32 snapshots; overflow preserves latest state without starving cleanup.
+for (const recovery of ["heartbeat", "close-at-capacity"]) {
+  test(`lifecycle writes are bounded at 32 with ${recovery} recovery`, async (t) => {
+    assert.equal(MAX_PENDING_WRITES, 32);
+    const entered = deferred();
+    const release = deferred();
+    let delayed = false;
+    let renamed;
+    const writes = [];
+    const operations = [];
+    const f = await fixture(t, {
+      io: {
+        ...fs,
+        async writeFile(path, json, options) {
+          writes.push(JSON.parse(json));
+          operations.push("write");
+          if (delayed) {
+            entered.resolve();
+            await release.promise;
+          }
+          return fs.writeFile(path, json, options);
+        },
+        async rename(...args) {
+          await fs.rename(...args);
+          operations.push("rename");
+          renamed?.resolve();
+        },
+        async unlink(...args) {
+          operations.push("delete");
+          return fs.unlink(...args);
+        },
+      },
+    });
+    await f.publisher.start();
+    delayed = true;
+    const updates = [f.publisher.beginRun()];
+    await entered.promise;
+    let closing;
+    try {
+      for (let i = 1; i < 80; i++) {
+        updates.push(f.publisher.setModel(`synthetic-${i}`).then(
+          () => "accepted",
+          (error) => {
+            assert.equal(error.message, "TrayGoblin: write-queue-full");
+            return "overflow";
+          },
+        ));
+      }
+      // The first overflowing lifecycle state change must survive for a later heartbeat.
+      await assert.rejects(f.publisher.promptStart(), { message: "TrayGoblin: write-queue-full" });
+      assert.deepEqual(f.reports, Array(49).fill("write-queue-full"));
+      for (let i = 0; i < 100; i++) f.tick();
+      assert.equal(writes.length, 2, "only initialization and the blocked write have reached I/O");
+      if (recovery === "close-at-capacity") {
+        closing = f.publisher.close();
+        assert.equal(closing, f.publisher.close());
+        await assert.rejects(f.publisher.setModel("synthetic-late"), /publisher-closed/);
+        assert.equal(f.cancelled(), 1);
+      }
+    } finally {
+      release.resolve();
+    }
+    const results = await Promise.all(updates);
+    assert.equal(results.filter((value) => value === "accepted").length + 1, 32);
+    assert.equal(results.filter((value) => value === "overflow").length, 48);
+    assert.equal(writes.length, 33, "32 retained writes plus initialization, not an unbounded backlog");
+    assert.equal(writes.at(-1).model, "synthetic-31");
+    assert.equal(writes.at(-1).state, "working");
+    if (recovery === "heartbeat") {
+      assert.equal((await f.read()).model, "synthetic-31");
+      renamed = deferred();
+      f.setClock(12000);
+      f.tick();
+      await renamed.promise;
+      const latest = await f.read();
+      assert.equal(latest.model, "synthetic-79");
+      assert.equal(latest.state, "input_required");
+      assert.equal(latest.attentionReason, null);
+      assert.equal(latest.episode, 1);
+      assert.equal(latest.updatedAt, 12000);
+      assert.equal(writes.length, 34, "one heartbeat recovers the latest rejected snapshot");
+      await f.publisher.close();
+    } else {
+      await closing;
+      assert.equal(operations.at(-1), "delete", "reserved close barrier drains every accepted snapshot first");
+    }
+    assert.deepEqual(await fs.readdir(join(f.root, "status")), []);
+  });
+}
 
 // Failure must preserve the previous complete file, report no raw exception, and recover.
 for (const stage of ["writeFile", "rename"]) {

@@ -11,6 +11,7 @@
 | Attention episode | A new explicit input requirement or supported terminal error, with stable identity for deduplication | Attention episode |
 | Input required | Any explicit blocking pi UI, including manual dialogs; not inferred from idle time | Input required |
 | Terminal error | Final pi run error or new persisted Copilot session.error, not a failed tool that the agent recovers from | Session error |
+| UI tracking fault | Ambiguous ID-less pi UI hooks; distinct integration error latched until publisher replacement, not model failure or inferred input | `ui_tracking_unavailable` |
 | Unavailable | Stale publisher or unreadable/stalled source; not proof of an agent input request | Unavailable |
 | Quiet completion | Successful completion without notification | Idle |
 | Notification request | A content-free policy action awaiting successful native adapter submission | Notification request |

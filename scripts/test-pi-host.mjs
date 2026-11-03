@@ -10,7 +10,10 @@ import net from "node:net";
 
 const [packageRoot, extensionPath, mode] = process.argv.slice(2);
 assert.ok(packageRoot && extensionPath, "package and extension paths are required");
-assert.ok(mode === undefined || mode === "startup-recovery" || mode === "startup-order");
+assert.ok(mode === undefined || [
+  "startup-recovery", "startup-order", "dialog-policy", "prompt-order",
+  "old-debt-new-dialog-idle", "old-debt-new-dialog-working", "old-debt-new-dialog-error",
+].includes(mode));
 assert.notEqual(process.env.HOME, undefined);
 assert.equal(process.env.HOME, process.env.USERPROFILE);
 assert.equal(process.env.PI_CODING_AGENT_DIR, join(process.env.HOME, "agent"));
@@ -98,6 +101,19 @@ export default function earlierConfirm(pi) {
 `);
   extensionPaths.unshift(earlierPath);
 }
+if (mode === "dialog-policy" || mode === "prompt-order" || mode?.startsWith("old-debt-new-dialog-")) {
+  const earlierPath = join(process.cwd(), "earlier-ui-observer.mjs");
+  await fs.writeFile(earlierPath, `
+export default function earlierUIObserver(pi) {
+  pi.on("ui_prompt_start", () => globalThis.trayGoblinTestStartObserver?.());
+  pi.on("session_before_compact", async (_event, ctx) => {
+    await ctx.ui.confirm("synthetic compaction title", "synthetic");
+    return { cancel: true };
+  });
+}
+`);
+  extensionPaths.unshift(earlierPath);
+}
 const loaded = await loadExtensions(extensionPaths, process.cwd());
 assert.deepEqual(loaded.errors, []);
 assert.equal(loaded.extensions.length, extensionPaths.length);
@@ -157,12 +173,17 @@ if (mode === "startup-order") {
 }
 const originalEmit = runner.emit.bind(runner);
 let promptEnded;
+let promptStarted;
+let promptEndDispatched;
 runner.emit = async (event) => {
   if (event.type === "ui_prompt_start" || event.type === "ui_prompt_end") {
     evidence[event.type === "ui_prompt_start" ? "uiStarts" : "uiEnds"]++;
     Object.defineProperty(event, "title", { get: forbidden });
   }
-  const result = await originalEmit(event);
+  const dispatch = originalEmit(event);
+  if (event.type === "ui_prompt_end") promptEndDispatched?.resolve();
+  const result = await dispatch;
+  if (event.type === "ui_prompt_start") promptStarted?.resolve();
   if (event.type === "ui_prompt_end") promptEnded?.resolve();
   return result;
 };
@@ -221,29 +242,34 @@ async function settle(outcome, aborted = false) {
   await boundary(outcome);
   await runner.emit(event("agent_settled", { aborted }));
 }
-async function prompt(kind, { reject = false, idle = false } = {}) {
+let allocatedEpisode = 0;
+async function prompt(kind, { reject = false } = {}) {
   dialog = deferred();
   const previous = await status();
   const args = kind === "custom" ? [forbidden] : ["synthetic title", "synthetic"];
+  promptEnded = deferred();
   const waiting = runner.getUIContext()[kind](...args);
   const observed = waiting.then(
     () => "resolved",
     () => "rejected",
   );
-  if (idle) {
-    await new Promise((done) => setImmediate(done));
-    assert.equal((await status()).state, previous.state);
-    assert.equal((await status()).episode, previous.episode);
-  } else {
-    const input = await waitFor((value) => value.state === "input_required");
-    assert.equal(input.episode, previous.episode + 1);
-    await new Promise((done) => setTimeout(done, 20));
-    assert.equal((await status()).episode, input.episode);
-  }
+  const input = await waitFor((value) => value.state === "input_required");
+  assert.equal(input.attentionReason, null);
+  allocatedEpisode = Math.max(allocatedEpisode, previous.episode) + 1;
+  assert.equal(input.episode, allocatedEpisode);
+  assert.equal(input.runStartedAt, previous.runStartedAt);
+  await new Promise((done) => setTimeout(done, 20));
+  assert.equal((await status()).episode, input.episode);
   if (reject) dialog.reject(new Error("synthetic rejected result"));
   else dialog.resolve(true);
   assert.equal(await observed, reject ? "rejected" : "resolved");
-  await waitFor((value) => value.state === (idle ? previous.state : "working"));
+  await promptEnded.promise;
+  promptEnded = undefined;
+  const restored = await waitFor((value) => value.state === previous.state);
+  assert.equal(restored.attentionReason, previous.attentionReason);
+  if (previous.state === "error") assert.equal(restored.episode, previous.episode);
+  assert.equal(restored.runStartedAt, previous.runStartedAt);
+  assert.equal(restored.lastRunDurationMs, previous.lastRunDurationMs);
 }
 
 async function exerciseLifecycle() {
@@ -252,7 +278,7 @@ async function exerciseLifecycle() {
   const first = await status();
   await waitFor((value) => value.updatedAt > first.updatedAt);
   evidence.heartbeatObserved = true;
-  await prompt("confirm", { idle: true });
+  await prompt("confirm");
 
   await runner.emit(event("before_agent_start"));
   assert.equal((await status()).state, "working");
@@ -268,15 +294,15 @@ async function exerciseLifecycle() {
   await runner.emit(event("agent_start"));
   await settle("completed");
   assert.equal((await status()).state, "idle");
-  assert.equal((await status()).episode, 3);
+  assert.equal((await status()).episode, 4);
 
   await runner.emit(event("agent_start"));
   await settle("error");
   const failed = await status();
   assert.equal(failed.state, "error");
-  assert.equal(failed.episode, 4);
+  assert.equal(failed.episode, 5);
   await runner.emit(event("agent_end"));
-  await prompt("select", { idle: true });
+  await prompt("select");
   assert.equal((await status()).state, "error");
   await waitFor((value) => value.updatedAt > failed.updatedAt);
   assert.equal((await status()).state, "error");
@@ -285,7 +311,7 @@ async function exerciseLifecycle() {
   assert.equal((await status()).state, "working");
   await settle("error", true);
   assert.equal((await status()).state, "idle");
-  assert.equal((await status()).episode, 4);
+  assert.equal((await status()).episode, failed.episode);
   await runner.emit(event("agent_start"));
   await settle("aborted");
   assert.equal((await status()).state, "idle");
@@ -294,10 +320,11 @@ async function exerciseLifecycle() {
   synchronousRejection = true;
   assert.throws(() => runner.getUIContext().confirm("synthetic", "synthetic"), /synthetic dialog rejection/);
   synchronousRejection = false;
-  await waitFor((value) => value.state === "working" && value.episode === 5);
+  await waitFor((value) => value.state === "working" && value.episode === 7);
+  allocatedEpisode = 7;
   await settle("completed");
   evidence.finalEpisode = (await status()).episode;
-  await prompt("editor", { idle: true });
+  await prompt("editor");
 
   modelId = "synthetic-new-model";
   await runner.emit(event("model_select"));
@@ -399,14 +426,13 @@ async function exerciseStartupRecovery() {
 // Earlier awaited startup UI must alert before answer, and fast completion must not strand input.
 async function exerciseStartupOrder() {
   await runner.emit(event("session_start"));
-  await prompt("confirm", { idle: true });
-  assert.equal((await status()).episode, 0);
+  await prompt("confirm");
+  assert.equal((await status()).episode, 1);
   evidence.startupOrder = { waitingEpisodes: [], clearedEpisodes: [] };
   for (const reject of [false, true]) {
     const previous = await status();
     assert.equal(previous.state, "idle");
     hostBusy = true;
-    assert.equal(runner.createContext().isIdle(), false);
     dialog = deferred();
     let finished = false;
     const starting = runner.emitBeforeAgentStart(
@@ -418,20 +444,21 @@ async function exerciseStartupOrder() {
       assert.equal(finished, false, "earlier startup handler is still awaiting confirm");
       assert.equal(input.episode, previous.episode + 1);
       assert.equal(input.instanceId, previous.instanceId);
-      assert.ok(Number.isSafeInteger(input.runStartedAt));
+      assert.equal(input.runStartedAt, null, "UI cannot infer an undelivered run start");
       evidence.startupOrder.waitingEpisodes.push(input.episode);
       if (reject) dialog.reject(new Error("synthetic dialog rejection"));
       else dialog.resolve(true);
       await starting;
       const cleared = await waitFor((value) => value.state === "working");
       assert.equal(cleared.episode, input.episode);
-      assert.equal(cleared.runStartedAt, input.runStartedAt);
+      assert.ok(Number.isSafeInteger(cleared.runStartedAt));
       evidence.startupOrder.clearedEpisodes.push(cleared.episode);
       await settle("completed");
       hostBusy = false;
       assert.equal((await status()).state, "idle");
-      await prompt("confirm", { idle: true });
-      assert.equal((await status()).episode, input.episode);
+      allocatedEpisode = input.episode;
+      await prompt("confirm");
+      assert.equal((await status()).episode, input.episode + 1);
     } finally {
       dialog.resolve(true);
       await starting;
@@ -441,29 +468,30 @@ async function exerciseStartupOrder() {
   hostBusy = true;
   fastResolution = true;
   blockedWrite = { entered: deferred(), release: deferred() };
-  promptEnded = deferred();
+  // Wait for hook delivery, not its blocked publication; completion is checked after release.
+  promptEndDispatched = deferred();
   const starting = runner.emitBeforeAgentStart(
     { messageType: "user", prompt: "synthetic" },
     { cwd: process.cwd(), selectedTools: [] },
   );
   try {
     await blockedWrite.entered.promise;
-    await promptEnded.promise;
+    await promptEndDispatched.promise;
   } finally {
     blockedWrite.release.resolve();
     await starting;
     blockedWrite = undefined;
     fastResolution = false;
-    promptEnded = undefined;
+    promptEndDispatched = undefined;
   }
-  await waitFor((value) => value.state === "working" && value.episode === 3);
+  await waitFor((value) => value.state === "working" && value.episode === 6);
   evidence.startupOrder.fastEndCleared = true;
   await settle("error");
   hostBusy = false;
   const failed = await status();
   assert.equal(failed.state, "error");
-  assert.equal(failed.episode, 4);
-  await prompt("confirm", { idle: true });
+  assert.equal(failed.episode, 7);
+  await prompt("confirm");
   assert.equal((await status()).state, "error");
   assert.equal((await status()).episode, failed.episode);
   await runner.emit(event("session_shutdown"));
@@ -475,9 +503,288 @@ async function exerciseStartupOrder() {
   assert.equal(evidence.networkCalls, 0);
 }
 
+// Real manual-compaction dispatch and all UI kinds must restore Idle/error without consulting isIdle.
+async function exerciseDialogPolicy() {
+  const { AgentSession } = await installed("core/agent-session.js");
+  // Only the installed getters are exercised here, not the model-backed compaction algorithm.
+  const syntheticSession = Object.create(AgentSession.prototype);
+  syntheticSession._isAgentRunActive = false;
+  await runner.emit(event("session_start"));
+  evidence.dialogPolicy = { restoredErrorEpisodes: [], idleRestored: false, overlapControls: 0 };
+  for (const underlying of ["idle", "error"]) {
+    if (underlying === "error") {
+      await runner.emit(event("agent_start"));
+      await settle("error");
+    }
+    const previous = await status();
+    syntheticSession._compactionAbortController = new AbortController();
+    assert.equal(syntheticSession.isStreaming, false);
+    assert.equal(syntheticSession.isIdle, false);
+    hostBusy = !syntheticSession.isIdle;
+    dialog = deferred();
+    promptEnded = deferred();
+    const compacting = runner.emit(event("session_before_compact"));
+    try {
+      const input = await waitFor((value) => value.state === "input_required");
+      assert.equal(input.runStartedAt, null, "manual compaction must not invent an agent run");
+      assert.equal(input.lastRunDurationMs, previous.lastRunDurationMs);
+      assert.ok(input.episode > previous.episode);
+      dialog.resolve(true);
+      assert.deepEqual(await compacting, { cancel: true });
+      await promptEnded.promise;
+      const restored = await status();
+      assert.equal(restored.state, underlying);
+      assert.equal(restored.runStartedAt, null);
+      assert.equal(restored.lastRunDurationMs, previous.lastRunDurationMs);
+      if (underlying === "error") {
+        assert.equal(restored.episode, previous.episode);
+        evidence.dialogPolicy.restoredErrorEpisodes.push(restored.episode);
+      } else {
+        evidence.dialogPolicy.idleRestored = true;
+      }
+    } finally {
+      dialog.resolve(true);
+      await compacting;
+      syntheticSession._compactionAbortController = undefined;
+      hostBusy = false;
+      promptEnded = undefined;
+    }
+    assert.equal(syntheticSession.isIdle, true);
+    allocatedEpisode = Math.max(allocatedEpisode, previous.episode) + 1;
+    for (const kind of ["confirm", "select", "input", "editor", "custom"]) {
+      await prompt(kind, { reject: true });
+      if (underlying === "error") {
+        evidence.dialogPolicy.restoredErrorEpisodes.push((await status()).episode);
+      }
+    }
+  }
+  // The actual wrapper coalesces overlapping/nested UI; either completion order must stay balanced.
+  for (const outerFirst of [true, false]) {
+    const previous = await status();
+    const starts = evidence.uiStarts;
+    const ends = evidence.uiEnds;
+    const outer = deferred();
+    const inner = deferred();
+    dialog = outer;
+    const first = runner.getUIContext().confirm("synthetic", "synthetic");
+    dialog = inner;
+    const second = runner.getUIContext().select("synthetic", ["synthetic"]);
+    await waitFor((value) => value.state === "input_required");
+    const input = await status();
+    const [early, late] = outerFirst ? [outer, inner] : [inner, outer];
+    early.resolve(true);
+    await (outerFirst ? first : second);
+    assert.equal((await status()).state, "input_required");
+    assert.equal((await status()).episode, input.episode);
+    promptEnded = deferred();
+    late.resolve(true);
+    await Promise.all([first, second]);
+    await promptEnded.promise;
+    promptEnded = undefined;
+    assert.equal((await status()).state, previous.state);
+    assert.equal((await status()).episode, previous.episode);
+    assert.equal(evidence.uiStarts - starts, 1);
+    assert.equal(evidence.uiEnds - ends, 1);
+    evidence.dialogPolicy.overlapControls++;
+  }
+  assert.equal(evidence.busyMetadataReads, 0, "publisher must never use generic busy metadata");
+  await runner.emit(event("session_shutdown"));
+  evidence.cleanupObserved = (await fs.readdir(process.env.TRAY_GOBLIN_STATUS_DIR)).length === 0;
+  assert.deepEqual(errors, []);
+}
+
+// Inverted ID-less hooks must latch a distinct fault, never restore false health or resurrect input.
+async function exercisePromptOrder() {
+  evidence.promptOrder = { invertedDialogs: 0, faultReasons: [], freshControls: 0 };
+  for (const underlying of ["working", "error", "idle"]) {
+    await runner.emit(event("session_start"));
+    await runner.emit(event("agent_start"));
+    if (underlying !== "working") await settle(underlying === "error" ? "error" : "completed");
+    const previous = await status();
+    const delayed = [];
+    let entered;
+    globalThis.trayGoblinTestStartObserver = () => {
+      const gate = deferred();
+      delayed.push(gate);
+      entered.resolve();
+      return gate.promise;
+    };
+    let faultEpisode;
+    // Repeated unmatched ends must retain one fault episode, not accumulate debt or IDs.
+    for (let i = 0; i < 2; i++) {
+      entered = deferred();
+      dialog = deferred();
+      promptEnded = deferred();
+      const waiting = runner.getUIContext().confirm("synthetic", "synthetic");
+      await entered.promise;
+      const beforeEnd = await status();
+      assert.equal(beforeEnd.state, i === 0 ? underlying : "error");
+      if (i > 0) {
+        assert.equal(beforeEnd.attentionReason, "ui_tracking_unavailable");
+        assert.equal(beforeEnd.episode, faultEpisode);
+      }
+      dialog.resolve(true);
+      await waiting;
+      await promptEnded.promise;
+      const failed = await status();
+      assert.equal(failed.state, "error");
+      assert.equal(failed.attentionReason, "ui_tracking_unavailable");
+      faultEpisode ??= previous.episode + 1;
+      assert.equal(failed.episode, faultEpisode);
+      evidence.promptOrder.invertedDialogs++;
+    }
+    // Reverse releases exercise start/start ordering independently of dialog completion order.
+    for (const gate of delayed.toReversed()) {
+      promptStarted = deferred();
+      gate.resolve();
+      await promptStarted.promise;
+      const restored = await status();
+      assert.equal(restored.state, "error", "late start cannot resurrect closed attention");
+      assert.equal(restored.attentionReason, "ui_tracking_unavailable");
+      assert.equal(restored.episode, faultEpisode, "late delivery cannot allocate a new fault");
+      assert.equal(restored.runStartedAt, previous.runStartedAt);
+      assert.equal(restored.lastRunDurationMs, previous.lastRunDurationMs);
+    }
+    delete globalThis.trayGoblinTestStartObserver;
+    promptStarted = undefined;
+    promptEnded = undefined;
+    evidence.promptOrder.faultReasons.push((await status()).attentionReason);
+    await runner.emit(event("session_shutdown"));
+    await runner.emit(event("session_start"));
+    assert.equal((await status()).state, "idle");
+    assert.equal((await status()).attentionReason, null);
+    allocatedEpisode = 0;
+    await prompt("confirm");
+    await prompt("input", { reject: true });
+    evidence.promptOrder.freshControls += 2;
+    await runner.emit(event("session_shutdown"));
+  }
+  assert.equal(evidence.busyMetadataReads, 0);
+  assert.deepEqual(errors, []);
+  await runner.emit(event("session_shutdown"));
+  evidence.cleanupObserved = (await fs.readdir(process.env.TRAY_GOBLIN_STATUS_DIR)).length === 0;
+}
+
+// This recreates the review's real-wrapper old-debt/NEW-open-dialog schedule for each base state.
+async function exerciseOldDebtNewDialog(underlying) {
+  await runner.emit(event("session_start"));
+  if (underlying !== "idle") await runner.emit(event("agent_start"));
+  if (underlying === "error") await settle("error");
+  const previous = await status();
+  const delayed = [];
+  let entered;
+  globalThis.trayGoblinTestStartObserver = () => {
+    const gate = deferred();
+    delayed.push(gate);
+    entered.resolve();
+    return gate.promise;
+  };
+  for (let i = 0; i < 2; i++) {
+    entered = deferred();
+    dialog = deferred();
+    promptEnded = deferred();
+    const old = runner.getUIContext().confirm("synthetic old", "synthetic");
+    await entered.promise;
+    dialog.resolve(true);
+    await old;
+    await promptEnded.promise;
+  }
+  delete globalThis.trayGoblinTestStartObserver;
+  promptStarted = deferred();
+  dialog = deferred();
+  const newDialog = dialog;
+  const waiting = runner.getUIContext().confirm("synthetic NEW", "synthetic");
+  let finished = false;
+  const observed = waiting.then(() => { finished = true; });
+  await promptStarted.promise;
+  const faultState = await status();
+  const faultEpisode = previous.episode + 1;
+  function assertFault(value) {
+    assert.equal(value.state, "error", "tracking fault must already be visible while NEW dialog waits");
+    assert.equal(value.attentionReason, "ui_tracking_unavailable");
+    assert.equal(value.episode, faultEpisode, "one stable integration-fault episode until reload");
+    assert.equal(value.instanceId, previous.instanceId);
+  }
+  try {
+    assert.equal(finished, false);
+    assertFault(faultState);
+    assert.equal(faultState.runStartedAt, previous.runStartedAt);
+    assert.equal(faultState.lastRunDurationMs, previous.lastRunDurationMs);
+    for (const gate of delayed.toReversed()) {
+      promptStarted = deferred();
+      gate.resolve();
+      await promptStarted.promise;
+      assertFault(await status());
+      assert.equal(finished, false);
+    }
+    const beforeHeartbeat = await status();
+    const heartbeat = await waitFor((value) => value.updatedAt > beforeHeartbeat.updatedAt);
+    assertFault(heartbeat);
+    for (const outcome of ["error", "completed", "aborted"]) {
+      await runner.emit(event("agent_start"));
+      assertFault(await status());
+      await settle(outcome);
+      assertFault(await status());
+      assert.equal(finished, false);
+    }
+    promptEnded = deferred();
+    newDialog.resolve(true);
+    await observed;
+    await promptEnded.promise;
+    assertFault(await status());
+    // Another delivered start and rejected end cannot clear or renew the fault.
+    dialog = deferred();
+    promptStarted = deferred();
+    promptEnded = deferred();
+    const rejected = runner.getUIContext().input("synthetic", "synthetic");
+    const rejection = assert.rejects(rejected, /synthetic rejection/);
+    await promptStarted.promise;
+    assertFault(await status());
+    dialog.reject(new Error("synthetic rejection"));
+    await rejection;
+    await promptEnded.promise;
+    const closed = await status();
+    assertFault(closed);
+    assertFault(await waitFor((value) => value.updatedAt > closed.updatedAt));
+    await runner.emit(event("session_shutdown"));
+    await runner.emit(event("session_start"));
+    const reloaded = await status();
+    assert.notEqual(reloaded.instanceId, previous.instanceId);
+    assert.equal(reloaded.state, "idle");
+    assert.equal(reloaded.attentionReason, null);
+    assert.equal(reloaded.episode, 0);
+    allocatedEpisode = 0;
+    await prompt("confirm");
+    await runner.emit(event("agent_start"));
+    await settle("error");
+    assert.equal((await status()).attentionReason, "run_error");
+    allocatedEpisode = (await status()).episode;
+    await prompt("select");
+    assert.equal((await status()).attentionReason, "run_error");
+    evidence.oldDebtNewDialog = {
+      underlying, faultEpisode, newDialogWaiting: true, stableFault: true,
+      heartbeatObserved: true, reloadRecovered: true,
+      state: faultState.state, attentionReason: faultState.attentionReason,
+    };
+  } finally {
+    for (const gate of delayed) gate.resolve();
+    newDialog.resolve(true);
+    await observed;
+    delete globalThis.trayGoblinTestStartObserver;
+    promptStarted = undefined;
+    promptEnded = undefined;
+  }
+  assert.deepEqual(errors, []);
+  await runner.emit(event("session_shutdown"));
+  evidence.cleanupObserved = (await fs.readdir(process.env.TRAY_GOBLIN_STATUS_DIR)).length === 0;
+}
+
 try {
   if (mode === "startup-recovery") await exerciseStartupRecovery();
   else if (mode === "startup-order") await exerciseStartupOrder();
+  else if (mode === "dialog-policy") await exerciseDialogPolicy();
+  else if (mode === "prompt-order") await exercisePromptOrder();
+  else if (mode?.startsWith("old-debt-new-dialog-")) await exerciseOldDebtNewDialog(mode.slice("old-debt-new-dialog-".length));
   else await exerciseLifecycle();
   process.stdout.write(JSON.stringify(evidence) + "\n");
 } finally {

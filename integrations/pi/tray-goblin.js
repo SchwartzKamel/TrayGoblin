@@ -5,6 +5,7 @@ import { join, resolve } from "node:path";
 
 export const HEARTBEAT_MS = 2000;
 export const MAX_STATUS_BYTES = 16 * 1024;
+export const MAX_PENDING_WRITES = 32;
 
 class StatusError extends Error {}
 
@@ -50,13 +51,18 @@ export function createStatusPublisher(metadata, options = {}) {
     model: bounded(metadata.model, 128),
     directory: bounded(metadata.directory, 2048),
     state: "idle",
+    attentionReason: null,
     episode: 0,
     updatedAt: 0,
     runStartedAt: null,
     lastRunDurationMs: null,
   };
   let active = false;
-  let prompts = 0;
+  let promptOpen = false;
+  let trackingFaultEpisode;
+  let runState = "idle";
+  let errorEpisode;
+  let allocatedEpisode = 0;
   let outcome;
   let tail = Promise.resolve();
   let pending = 0;
@@ -75,7 +81,10 @@ export function createStatusPublisher(metadata, options = {}) {
     return value;
   }
 
-  function enqueue(operation) {
+  function enqueue(operation, closeBarrier = false) {
+    if (!closeBarrier && pending >= MAX_PENDING_WRITES) {
+      return Promise.reject(failure("write-queue-full"));
+    }
     pending++;
     const result = tail.then(operation).finally(() => pending--);
     // Keep the serialization barrier usable after a reported failed operation.
@@ -169,21 +178,37 @@ export function createStatusPublisher(metadata, options = {}) {
     return publish();
   }
 
-  function attention(state) {
-    if (status.state !== state) {
-      if (status.episode === Number.MAX_SAFE_INTEGER) {
-        throw failure("episode-exhausted");
-      }
-      status.episode++;
-      status.state = state;
+  function allocateEpisode() {
+    if (allocatedEpisode === Number.MAX_SAFE_INTEGER) {
+      throw failure("episode-exhausted");
     }
+    return ++allocatedEpisode;
+  }
+
+  function restoreState() {
+    if (trackingFaultEpisode !== undefined) {
+      status.state = "error";
+      status.attentionReason = "ui_tracking_unavailable";
+      status.episode = trackingFaultEpisode;
+      return;
+    }
+    status.state = promptOpen ? "input_required" : runState;
+    status.attentionReason = status.state === "error" ? "run_error" : null;
+    if (status.state === "error") status.episode = errorEpisode;
+  }
+
+  function trackingFault() {
+    trackingFaultEpisode ??= allocateEpisode();
+    restoreState();
   }
 
   function beginRunState() {
     if (!active) {
       active = true;
       status.runStartedAt = timestamp();
-      status.state = prompts ? "input_required" : "working";
+      runState = "working";
+      errorEpisode = undefined;
+      restoreState();
     }
     outcome = undefined;
   }
@@ -223,24 +248,34 @@ export function createStatusPublisher(metadata, options = {}) {
       return update(() => {
         if (!active) return;
         active = false;
-        prompts = 0;
         status.lastRunDurationMs = Math.max(0, timestamp() - status.runStartedAt);
         status.runStartedAt = null;
-        if (!aborted && outcome === "error") attention("error");
-        else status.state = "idle";
+        if (!aborted && outcome === "error") {
+          runState = "error";
+          errorEpisode = allocateEpisode();
+        } else {
+          runState = "idle";
+        }
+        restoreState();
         outcome = undefined;
       });
     },
-    promptStart(hostBusy = false) {
+    promptStart() {
       return update(() => {
-        // Earlier startup handlers can open UI before our own run-start handler.
-        if (!active && hostBusy) beginRunState();
-        if (active && ++prompts === 1) attention("input_required");
+        if (trackingFaultEpisode !== undefined) return;
+        // Pi emits only the outermost interval; a second start cannot identify a dialog.
+        if (promptOpen) return trackingFault();
+        promptOpen = true;
+        status.episode = allocateEpisode();
+        restoreState();
       });
     },
     promptEnd() {
       return update(() => {
-        if (active && prompts > 0 && --prompts === 0) status.state = "working";
+        if (trackingFaultEpisode !== undefined) return;
+        if (!promptOpen) return trackingFault();
+        promptOpen = false;
+        restoreState();
       });
     },
     setModel(model) {
@@ -253,6 +288,7 @@ export function createStatusPublisher(metadata, options = {}) {
       closing = true;
       if (timer !== undefined) cancel(timer);
       timer = undefined;
+      // Cleanup has one reserved ordered slot even when all write slots are occupied.
       closePromise = enqueue(async () => {
         if ((await ownsFile()) === true) {
           try {
@@ -261,7 +297,7 @@ export function createStatusPublisher(metadata, options = {}) {
             if (error.code !== "ENOENT") throw failure("delete-failed");
           }
         }
-      });
+      }, true);
       return closePromise;
     },
   };
@@ -284,9 +320,7 @@ export default function trayGoblin(pi) {
     publisher?.beforeSettle(event.outcome);
   });
   pi.on("agent_settled", (event) => publisher?.settle(event.aborted));
-  pi.on("ui_prompt_start", (_event, ctx) =>
-    publisher?.promptStart(!ctx.isIdle()),
-  );
+  pi.on("ui_prompt_start", () => publisher?.promptStart());
   pi.on("ui_prompt_end", () => publisher?.promptEnd());
   pi.on("model_select", (_event, ctx) =>
     publisher?.setModel(ctx.model?.id ?? ""),

@@ -16,4 +16,4 @@ steps:
   - action: Open and close a manual pi dialog while a previous session error remains outstanding.
     expect: Input attention appears for the explicit dialog; closure restores the same error identity without inventing Working or notifying again for the old error.
   - action: Delay an earlier extension's dialog-start observer until after the confirmation closes, then let all hooks finish.
-    expect: The closed dialog does not remain or resurrect as outstanding input; the stable session state and sensitive-field exclusions remain intact.
+    expect: The closed dialog never resurrects as input. Ambiguous ordering produces one distinctly labeled tracking-error episode that stays visible while newer dialogs open and until publisher reload; no false healthy state, repeated fault IDs, or sensitive-field access.

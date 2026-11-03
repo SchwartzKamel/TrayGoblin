@@ -83,10 +83,17 @@ Simplicity and effectiveness take priority over dashboards and remote control.
   the same pre-existing error identity. UI events must never fabricate a run or
   clear an error. Observe boundary `outcome` without touching messages, results,
   context entries, history, credentials, or tokens; only final settlement produces
-  a terminal-error episode. Handle end-before-start delivery without resurrecting
-  closed input state. Tests use actual asynchronous earlier observers, not only
-  delayed filesystem writes. Upstream extension callbacks can delay hook delivery;
-  observation latency starts at delivered hooks, not an inaccessible UI timestamp.
+  a terminal-error episode. Pi1.4 reports one outermost blocking UI interval;
+  end-without-start or a second start before end makes its ID-less stream ambiguous.
+  Fail visibly: latch a distinct `ui_tracking_unavailable` error episode until
+  publisher reload/replacement, rather than counting old debt against new dialogs
+  or pretending the session is healthy. This is an integration error, not a model
+  failure or input guess. Preserve underlying lifecycle state privately; healthy
+  dialog closure still restores it normally. Publish `attentionReason` as null,
+  `run_error`, or `ui_tracking_unavailable`; the fault episode is stable across
+  later hooks/heartbeats, not re-alerted on each poll. Tests include a newer open
+  dialog before old delayed starts arrive. Upstream callbacks can delay hook
+  delivery; observation latency starts at delivered hooks, not hidden UI timestamps.
 - Multi-session Copilot monitoring keeps independent offsets/turn state per active
   lock-directory. Existing historical events initialize state without notification
   replay. New `session.error` records create episodes; tool failures alone do not.
@@ -126,6 +133,10 @@ Simplicity and effectiveness take priority over dashboards and remote control.
 - After the publisher receives the relevant lifecycle hook, fresh input/error
   state and clearing are observed within two polling intervals plus 500 ms; heartbeat/source staleness clears input visibility after 10 seconds
   plus two intervals. Test with injected clock, not long wall-clock sleeps.
+- Publisher pending lifecycle writes are capped at32; heartbeats remain coalesced.
+  Overflow rejects with a fixed content-free diagnostic while retaining latest
+  in-memory state for later heartbeat recovery. Reserve one ordered close barrier
+  even at capacity. Test blocked I/O, >32 updates, bounded retention and cleanup.
 - Publisher close is an ordered barrier: pending writes complete before its own
   file is removed; later writes are rejected. Test injected write/rename/delete
   rejection, shutdown during a pending write, and a replacement file owned by a
@@ -162,7 +173,7 @@ Simplicity and effectiveness take priority over dashboards and remote control.
 
 | ID | EARS requirement | Command / evidence tier |
 |---|---|---|
-| R1 ADDED | When pi opens any explicit blocking extension dialog, including manual/compaction dialogs, the extension shall publish a content-free input episode, restore prior state on resolve/reject, and not resurrect input after end-before-start delivery. | `node --test tests/pi-status.test.mjs tests/pi-host.test.mjs` — real installed pi 1.4.0 loader/runner, offline |
+| R1 ADDED | With coherent pi UI hooks, every explicit blocking dialog shall publish content-free input and restore prior state on close; if ordering is ambiguous, a stable, distinctly labeled tracking-error episode shall replace unsafe input inference until reload. | `node --test tests/pi-status.test.mjs tests/pi-host.test.mjs` — real installed pi 1.4.0 loader/runner, offline |
 | R2 ADDED | When pi settles after an error, the extension shall publish one error episode; successful settlement, abort, and recovered tool errors shall remain quiet. | Same node command; delayed/rejected UI and continuation cases through pinned host |
 | R3 ADDED | When publishing, the extension shall write bounded atomic status, heartbeat while alive, and remove only its own file on shutdown/reload. | Same node command; sensitive-field getters throw if accessed, cleanup and concurrent-write assertions |
 | R4 ADDED | While several sources/sessions are active, the monitor shall preserve independent identities/state/offsets and explicitly state provider input-detection capability. | `cargo test --workspace` — `tests/attention_monitor.rs` and config/parser tests |
@@ -209,7 +220,12 @@ Simplicity and effectiveness take priority over dashboards and remote control.
 Independent real-host review disproved generic-busy activity inference and ordered
 UI delivery in the initial24-test implementation. The user approved all explicit
 blocking pi dialogs (including manual ones), with prior state restored on close.
-Only acceptance assertions that required idle dialogs to remain invisible are
-superseded by this explicit authorization; privacy, quiet ordinary Idle/completion,
-startup recovery, and event-order safeguards remain mandatory. M1.R3 must prove
-new real-host regressions fail on `c67522b` and pass after the correction.
+Acceptance assertions requiring invisible idle dialogs or inferred agent activity
+are superseded by explicit authorization. For ambiguous ordering, the review-driven
+R7 fault path must assert a distinct monitoring error rather than healthy restoration;
+this is not a waiver of ordering correctness. Privacy, quiet ordinary Idle/completion,
+startup recovery, and no-resurrected-input protections remain mandatory. M1.R3 proved
+its real-host regressions fail on `c67522b`; M1.R4 must additionally prove the
+old-debt/NEW-open-dialog schedule fails on
+`af726b0c8cb9495a9b648573e893ff54f0a2e12d` in all three base states and passes with
+one stable, distinct tracking-fault episode until publisher replacement.

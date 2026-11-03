@@ -48,7 +48,8 @@ test("pi 1.4.0 runtime-loads the shipped publisher with real blocking UI wrappin
   assert.equal(evidence.heartbeatObserved, true);
   assert.equal(evidence.replacementObserved, true);
   assert.equal(evidence.cleanupObserved, true);
-  assert.equal(evidence.finalEpisode, 5);
+  assert.equal(evidence.finalEpisode, 7);
+  assert.equal(evidence.busyMetadataReads, 0);
   assert.deepEqual(evidence.ioFailures, [
     "TrayGoblin: write-failed", "TrayGoblin: rename-failed", "TrayGoblin: delete-failed",
   ]);
@@ -135,12 +136,12 @@ test("pi 1.4.0 earlier startup handler input is load-order independent and clear
   const evidence = JSON.parse(stdout);
   assert.equal(evidence.hostVersion, "1.4.0");
   assert.equal(evidence.extensionsLoaded, 2);
-  assert.deepEqual(evidence.startupOrder.waitingEpisodes, [1, 2]);
-  assert.deepEqual(evidence.startupOrder.clearedEpisodes, [1, 2]);
+  assert.deepEqual(evidence.startupOrder.waitingEpisodes, [2, 4]);
+  assert.deepEqual(evidence.startupOrder.clearedEpisodes, [2, 4]);
   assert.equal(evidence.startupOrder.fastEndCleared, true);
   assert.equal(evidence.uiStarts, 7);
   assert.equal(evidence.uiEnds, 7);
-  assert.ok(evidence.busyMetadataReads > 2);
+  assert.equal(evidence.busyMetadataReads, 0);
   assert.equal(evidence.cleanupObserved, true);
   assert.equal(evidence.sensitiveReads, 0);
   assert.equal(evidence.networkCalls, 0);
@@ -148,3 +149,105 @@ test("pi 1.4.0 earlier startup handler input is load-order independent and clear
   await assert.rejects(fs.stat(join(home, "agent", "settings.json")), { code: "ENOENT" });
   assert.deepEqual(await fs.readdir(join(home, "status")), []);
 });
+
+// These cross the installed loader/runner/UI wrapper, not hand-written prompt-event stubs.
+for (const mode of ["dialog-policy", "prompt-order"]) {
+  test(`pi 1.4.0 ${mode} preserves independently observed state and balanced attention`, async (t) => {
+    const home = await fs.mkdtemp(join(tmpdir(), `traygoblin-pi-${mode}-`));
+    t.after(() => fs.rm(home, { recursive: true, force: true }));
+    const workspace = join(home, "workspace");
+    await fs.mkdir(workspace);
+    const packageRoot = process.env.PI_CODING_AGENT_PACKAGE ??
+      resolve(dirname(process.execPath), "../lib/node_modules/@earendil-works/pi-coding-agent");
+    const { stdout, stderr } = await promisify(execFile)(
+      process.execPath,
+      [resolve("scripts/test-pi-host.mjs"), packageRoot, resolve("integrations/pi/tray-goblin.js"), mode],
+      {
+        cwd: workspace,
+        env: {
+          PATH: dirname(process.execPath),
+          HOME: home,
+          USERPROFILE: home,
+          XDG_CONFIG_HOME: join(home, "config"),
+          XDG_CACHE_HOME: join(home, "cache"),
+          PI_CODING_AGENT_DIR: join(home, "agent"),
+          TRAY_GOBLIN_STATUS_DIR: join(home, "status"),
+        },
+        timeout: 15000,
+        maxBuffer: 128 * 1024,
+      },
+    );
+    assert.equal(stderr, "");
+    const evidence = JSON.parse(stdout);
+    assert.equal(evidence.hostVersion, "1.4.0");
+    assert.equal(evidence.extensionsLoaded, 2);
+    assert.equal(evidence.uiStarts, evidence.uiEnds);
+    assert.equal(evidence.busyMetadataReads, 0);
+    assert.equal(evidence.sensitiveReads, 0);
+    assert.equal(evidence.networkCalls, 0);
+    assert.equal(evidence.cleanupObserved, true);
+    if (mode === "dialog-policy") {
+      assert.equal(evidence.uiStarts, 14);
+      assert.equal(evidence.dialogPolicy.idleRestored, true);
+      assert.deepEqual(evidence.dialogPolicy.restoredErrorEpisodes, [7, 7, 7, 7, 7, 7]);
+      assert.equal(evidence.dialogPolicy.overlapControls, 2);
+    } else {
+      assert.equal(evidence.uiStarts, 12);
+      assert.equal(evidence.promptOrder.invertedDialogs, 6);
+      assert.deepEqual(evidence.promptOrder.faultReasons, Array(3).fill("ui_tracking_unavailable"));
+      assert.equal(evidence.promptOrder.freshControls, 6);
+    }
+    await assert.rejects(fs.stat(join(home, "agent", "auth.json")), { code: "ENOENT" });
+    await assert.rejects(fs.stat(join(home, "agent", "settings.json")), { code: "ENOENT" });
+    assert.deepEqual(await fs.readdir(join(home, "status")), []);
+  });
+}
+
+// Each base state must fail visibly before old callbacks resolve, using the installed outermost UI wrapper.
+for (const underlying of ["idle", "working", "error"]) {
+  test(`pi 1.4.0 old-debt NEW dialog latches a stable tracking fault over ${underlying}`, async (t) => {
+    const home = await fs.mkdtemp(join(tmpdir(), "traygoblin-pi-new-dialog-"));
+    t.after(() => fs.rm(home, { recursive: true, force: true }));
+    const workspace = join(home, "workspace");
+    await fs.mkdir(workspace);
+    const packageRoot = process.env.PI_CODING_AGENT_PACKAGE ??
+      resolve(dirname(process.execPath), "../lib/node_modules/@earendil-works/pi-coding-agent");
+    const { stdout, stderr } = await promisify(execFile)(
+      process.execPath,
+      [
+        resolve("scripts/test-pi-host.mjs"), packageRoot,
+        resolve("integrations/pi/tray-goblin.js"), `old-debt-new-dialog-${underlying}`,
+      ],
+      {
+        cwd: workspace,
+        env: {
+          PATH: dirname(process.execPath), HOME: home, USERPROFILE: home,
+          XDG_CONFIG_HOME: join(home, "config"), XDG_CACHE_HOME: join(home, "cache"),
+          PI_CODING_AGENT_DIR: join(home, "agent"),
+          TRAY_GOBLIN_STATUS_DIR: join(home, "status"),
+        },
+        timeout: 15000,
+        maxBuffer: 128 * 1024,
+      },
+    );
+    assert.equal(stderr, "");
+    const evidence = JSON.parse(stdout);
+    assert.equal(evidence.hostVersion, "1.4.0");
+    assert.equal(evidence.extensionsLoaded, 2);
+    assert.equal(evidence.uiStarts, 6);
+    assert.equal(evidence.uiEnds, 6);
+    assert.equal(evidence.sensitiveReads, 0);
+    assert.equal(evidence.busyMetadataReads, 0);
+    assert.equal(evidence.networkCalls, 0);
+    assert.equal(evidence.cleanupObserved, true);
+    assert.deepEqual(evidence.oldDebtNewDialog, {
+      underlying, faultEpisode: underlying === "error" ? 2 : 1,
+      newDialogWaiting: true, stableFault: true,
+      heartbeatObserved: true, reloadRecovered: true,
+      state: "error", attentionReason: "ui_tracking_unavailable",
+    });
+    await assert.rejects(fs.stat(join(home, "agent", "auth.json")), { code: "ENOENT" });
+    await assert.rejects(fs.stat(join(home, "agent", "settings.json")), { code: "ENOENT" });
+    assert.deepEqual(await fs.readdir(join(home, "status")), []);
+  });
+}
