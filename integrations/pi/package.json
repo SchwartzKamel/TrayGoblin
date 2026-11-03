@@ -1,0 +1,12 @@
+{
+  "name": "tray-goblin-pi",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "pi": {
+    "extensions": ["./tray-goblin.js"]
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*"
+  }
+}

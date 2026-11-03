@@ -193,3 +193,14 @@ Simplicity and effectiveness take priority over dashboards and remote control.
 - No successful-completion alerts, idle/stall heuristics, prompt/response display,
   tool argument/result capture, token/cost accounting, credentials, repository file
   contents, terminal scraping/focus/control, remote SSH, auto-update, or Linux GUI.
+
+## Blocking implementation discovery (not an approved scope change)
+M1's24-test suite passes, but independent actual-host review disproves its inferred
+active-run predicate and UI dispatch-order assumptions. `ctx.isIdle()` is also
+false for standalone compaction/summarization; delayed earlier UI observers can
+invert start/end delivery to this extension. M1 is blocked; no acceptance test is
+waived or weakened. The current stricter agent-run-only requirement remains in
+force until the user decides whether all explicit blocking pi dialogs may alert,
+including manual dialogs, with prior state restored after closure. This simpler
+policy is recommended, but event-order recovery still needs its own real-host
+counterexample/regression. See plan M1.R3 and `.wgm/rugged/M1-current.md`.
