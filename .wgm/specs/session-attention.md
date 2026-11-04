@@ -97,6 +97,12 @@ Simplicity and effectiveness take priority over dashboards and remote control.
 - Multi-session Copilot monitoring keeps independent offsets/turn state per active
   lock-directory. Existing historical events initialize state without notification
   replay. New `session.error` records create episodes; tool failures alone do not.
+  Copilot observation IDs are opaque and allocated from a checked, non-recycling
+  process-lifetime sequence, not a volatile parser/session counter. A source/log/
+  monitor cache reset must not reuse an ID while a controller can remember it.
+  Keep bounded known parser/provenance through temporary source loss while still
+  returning an explicitly unavailable source; unchanged known errors preserve
+  acknowledgement/exhaustion, and genuinely new errors remain independently eligible.
 - Bound sources to 16 and visible live sessions to 64 per source; overflow is a
   visible diagnostic rather than silent truncation. Test a mixed 64-session load;
   this is a stress baseline, not a measured Windows capacity/performance claim.
