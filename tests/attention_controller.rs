@@ -1,5 +1,557 @@
 //! Synthetic policy, bounded-source concurrency and real filesystem integration.
 
+mod copilot_provenance {
+    use super::*;
+    use tray_goblin::{attention::NotificationRequest, monitor::AttentionMonitor};
+
+    fn file_identity(path: &Path) -> String {
+        let metadata = fs::metadata(path).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt;
+            format!("{}:{}", metadata.dev(), metadata.ino())
+        }
+        #[cfg(not(unix))]
+        {
+            format!("{:?}", metadata.created().unwrap())
+        }
+    }
+
+    struct ReadEvidence {
+        snapshot: SourceSnapshot,
+        now: u64,
+        lines: u64,
+        monitor: usize,
+        thread: thread::ThreadId,
+    }
+
+    // Exactly one real parser and owned worker; the channel only witnesses completed
+    // reads. No hand-counted snapshots or local episode counters drive these tests.
+    struct Harness {
+        scratch: Scratch,
+        source: Source,
+        workers: AttentionWorkers,
+        controller: AttentionController,
+        reports: mpsc::Receiver<ReadEvidence>,
+        owner: Option<(usize, thread::ThreadId)>,
+        lines: u64,
+        lock: (String, std::time::SystemTime, std::time::SystemTime),
+    }
+
+    impl Harness {
+        fn new(history: &str) -> Self {
+            let scratch = Scratch::new();
+            let source = sources(&["copilot"], &scratch.0).remove(0);
+            let session = source.path.join("copilot-0");
+            fs::create_dir_all(&session).unwrap();
+            fs::write(session.join("inuse.1.lock"), "").unwrap();
+            fs::write(session.join("events.jsonl"), history).unwrap();
+            let metadata = fs::metadata(session.join("inuse.1.lock")).unwrap();
+            let lock = (
+                file_identity(&session.join("inuse.1.lock")),
+                metadata.created().unwrap(),
+                metadata.modified().unwrap(),
+            );
+            let (send, reports) = mpsc::sync_channel(1);
+            let workers = AttentionWorkers::with_readers(vec![source.clone()], NOW, |source| {
+                let mut monitor = Box::new(AttentionMonitor::new(vec![source.clone()]).unwrap());
+                let address = (&*monitor as *const AttentionMonitor) as usize;
+                let send = send.clone();
+                Box::new(move |now| {
+                    let snapshot = monitor.poll_at(now).sources.remove(0);
+                    send.send(ReadEvidence {
+                        snapshot: snapshot.clone(),
+                        now,
+                        lines: monitor.lines_processed(),
+                        monitor: address,
+                        thread: thread::current().id(),
+                    })
+                    .unwrap();
+                    snapshot
+                })
+            })
+            .unwrap();
+            Self {
+                scratch,
+                source,
+                workers,
+                controller: AttentionController::default(),
+                reports,
+                owner: None,
+                lines: 0,
+                lock,
+            }
+        }
+
+        fn log(&self) -> PathBuf {
+            self.source.path.join("copilot-0/events.jsonl")
+        }
+        fn parked(&self) -> PathBuf {
+            self.scratch.0.join("offline")
+        }
+
+        fn append_error(&self, now: u64) {
+            assert_eq!(now % 1_000, 0);
+            append(
+                &self.source,
+                0,
+                &format!(
+                    "{{\"type\":\"session.error\",\"timestamp\":\"1970-01-01T00:{:02}:{:02}Z\"}}\n",
+                    now / 60_000,
+                    (now / 1_000) % 60,
+                ),
+            );
+        }
+
+        fn poll(&mut self, now: u64) -> AttentionSnapshot {
+            self.workers.request_poll(now);
+            let report = self.reports.recv_timeout(Duration::from_secs(1)).unwrap();
+            assert_eq!(report.now, now);
+            assert_eq!(self.workers.worker_count(), 1);
+            let owner = (report.monitor, report.thread);
+            if let Some(previous) = self.owner {
+                assert_eq!(previous, owner);
+            }
+            self.owner = Some(owner);
+            self.lines = report.lines;
+            let expected = serde_json::to_value(&report.snapshot).unwrap();
+            let started = Instant::now();
+            loop {
+                let value = self.workers.drain_at(now);
+                if serde_json::to_value(&value.sources[0]).unwrap() == expected
+                    && value.sources[0].membership.complete == report.snapshot.membership.complete
+                    && value.sources[0].membership.instances == report.snapshot.membership.instances
+                {
+                    return value;
+                }
+                assert!(
+                    started.elapsed() < Duration::from_secs(1),
+                    "parser result not published"
+                );
+                thread::yield_now();
+            }
+        }
+
+        fn tick(&mut self, now: u64) -> Option<NotificationRequest> {
+            let value = self.poll(now);
+            self.controller.tick(value, now)
+        }
+
+        fn baseline(&mut self) {
+            assert!(self.tick(NOW).is_none());
+            assert_eq!(
+                self.controller.snapshot().sources[0].sessions[0].state,
+                SessionState::Idle
+            );
+            assert_eq!(self.lines, 0);
+        }
+
+        fn first_error(&mut self) -> NotificationRequest {
+            self.baseline();
+            self.append_error(21_000);
+            self.tick(21_000).expect("first post-baseline error alerts")
+        }
+
+        fn unavailable(&mut self, now: u64) {
+            fs::rename(&self.source.path, self.parked()).unwrap();
+            let value = self.poll(now);
+            assert!(value.sources[0].sessions.is_empty());
+            assert!(!value.sources[0].membership.complete);
+            assert_eq!(
+                value.sources[0].diagnostics,
+                [Diagnostic::SourceUnavailable]
+            );
+            assert!(self.controller.tick(value, now).is_none());
+        }
+
+        // Rejecting a nonregular lock is intentional. It makes membership unknown,
+        // not absent, while the actual lock, log, parser and worker stay unchanged.
+        fn partial_scan(&mut self, now: u64) {
+            let identity = file_identity(&self.log());
+            let bytes = fs::read(self.log()).unwrap();
+            let lines = self.lines;
+            let marker = self.source.path.join("copilot-0/inuse.transient.lock");
+            fs::create_dir(&marker).unwrap();
+            let value = self.poll(now);
+            assert!(value.sources[0].sessions.is_empty());
+            assert!(!value.sources[0].membership.complete);
+            assert!(value.sources[0].membership.instances.is_empty());
+            assert_eq!(
+                value.sources[0].diagnostics,
+                [Diagnostic::SessionUnavailable]
+            );
+            assert!(self.controller.tick(value, now).is_none());
+            fs::remove_dir(marker).unwrap();
+            self.assert_lock_unchanged();
+            assert_eq!(file_identity(&self.log()), identity);
+            assert_eq!(fs::read(self.log()).unwrap(), bytes);
+            assert_eq!(self.lines, lines, "partial scan cannot consume events");
+        }
+
+        fn restore(&mut self) {
+            fs::rename(self.parked(), &self.source.path).unwrap();
+            self.assert_lock_unchanged();
+        }
+
+        fn assert_lock_unchanged(&self) {
+            let path = self.source.path.join("copilot-0/inuse.1.lock");
+            let metadata = fs::metadata(&path).unwrap();
+            assert_eq!(
+                self.lock,
+                (
+                    file_identity(&path),
+                    metadata.created().unwrap(),
+                    metadata.modified().unwrap()
+                )
+            );
+        }
+    }
+
+    impl Drop for Harness {
+        fn drop(&mut self) {
+            self.workers.stop();
+        }
+    }
+
+    // Acknowledged error -> unavailable root -> same-inode truncation -> observed
+    // empty recovery baseline -> NEW persisted error must not inherit acknowledgement.
+    #[test]
+    fn copilot_new_error_after_source_cache_loss() {
+        let mut h = Harness::new("");
+        let first = h.first_error();
+        h.controller.submitted(first.id, true, 21_000);
+        assert!(h.tick(27_000).is_none());
+        let event_identity = file_identity(&h.log());
+        h.unavailable(28_000);
+        fs::write(h.parked().join("copilot-0/events.jsonl"), "").unwrap();
+        h.restore();
+        let empty = h.poll(29_000);
+        assert_eq!(file_identity(&h.log()), event_identity);
+        assert_eq!(fs::metadata(h.log()).unwrap().len(), 0);
+        assert_eq!(
+            empty.sources[0].sessions[0].instance_id,
+            first.episodes[0].session.instance_id
+        );
+        assert_eq!(empty.sources[0].sessions[0].state, SessionState::Idle);
+        assert!(empty.sources[0].sessions[0].attention.is_none());
+        assert_eq!(h.lines, 1);
+        assert!(h.controller.tick(empty, 29_000).is_none());
+        h.append_error(30_000);
+        let new = h.poll(30_000);
+        let session = &new.sources[0].sessions[0];
+        assert_eq!(session.state, SessionState::Error);
+        let episode = session.attention.as_ref().unwrap();
+        assert!(episode.notify);
+        assert_eq!(episode.reason, EpisodeReason::SessionError);
+        assert_eq!(h.lines, 2);
+        let new_id = episode.id;
+        let request = h.controller.tick(new.clone(), 30_000);
+        h.controller.refresh();
+        let after_refresh = h.controller.tick(new, 36_000);
+        eprintln!(
+            "same lock/log identity; old_id={}, new_id={new_id}, eligible={}, after_refresh={}",
+            first.episodes[0].episode.id,
+            request.is_some(),
+            after_refresh.is_some()
+        );
+        assert!(
+            request.is_some(),
+            "NEW persisted error after empty recovery baseline inherited old acknowledgement"
+        );
+        let request = request.unwrap();
+        assert_eq!(request.episodes[0].session, first.episodes[0].session);
+        assert_ne!(new_id, first.episodes[0].episode.id);
+        h.controller.submitted(request.id, true, 36_000);
+        assert!(h.tick(37_000).is_none());
+    }
+
+    // Source loss without a log boundary preserves the SAME acknowledged episode;
+    // neither recovery nor Refresh replays it, but a genuinely new append alerts.
+    #[test]
+    fn copilot_source_recovery_preserves_acknowledged_error() {
+        let mut h = Harness::new("");
+        let first = h.first_error();
+        h.controller.submitted(first.id, true, 21_000);
+        h.unavailable(22_000);
+        h.restore();
+        let recovered = h.poll(23_000);
+        assert_eq!(
+            recovered.sources[0].sessions[0]
+                .attention
+                .as_ref()
+                .unwrap()
+                .id,
+            first.episodes[0].episode.id
+        );
+        assert!(h.controller.tick(recovered, 23_000).is_none());
+        h.controller.refresh();
+        assert!(h.tick(29_000).is_none());
+        h.append_error(30_000);
+        let new = h.tick(30_000).unwrap();
+        assert_eq!(new.episodes[0].session, first.episodes[0].session);
+        assert_ne!(new.episodes[0].episode.id, first.episodes[0].episode.id);
+    }
+
+    // An unsubmitted request is cancelled while unavailable; recovery keeps its
+    // consumed attempt and spacing instead of silently treating it as historical.
+    #[test]
+    fn copilot_source_recovery_preserves_pending_retry_budget() {
+        let mut h = Harness::new("");
+        let obsolete = h.first_error();
+        h.unavailable(22_000);
+        h.controller.submitted(obsolete.id, true, 22_000);
+        h.restore();
+        assert!(h.tick(23_000).is_none());
+        assert!(h.tick(25_999).is_none());
+        for now in [26_000, 31_000] {
+            let retry = h
+                .tick(now)
+                .expect("known undelivered error keeps retry eligibility");
+            assert_eq!(retry.episodes, obsolete.episodes);
+            h.controller.submitted(retry.id, false, now);
+        }
+        assert!(
+            h.tick(36_000).is_none(),
+            "initial pending attempt still counts toward three"
+        );
+        h.controller.refresh();
+        let rearmed = h
+            .tick(37_000)
+            .expect("Refresh rearms exhausted undelivered error");
+        h.controller.submitted(rearmed.id, true, 37_000);
+        assert!(h.tick(43_000).is_none());
+    }
+
+    // Exhaustion survives source loss; explicit Refresh alone can rearm that SAME
+    // error. A new persisted event has its OWN three attempts and ignores old callbacks.
+    #[test]
+    fn copilot_source_recovery_preserves_exhaustion_and_new_error_budget() {
+        let mut h = Harness::new("");
+        let first = h.first_error();
+        h.controller.submitted(first.id, false, 21_000);
+        for now in [26_000, 31_000] {
+            let retry = h.tick(now).unwrap();
+            assert_eq!(retry.episodes, first.episodes);
+            h.controller.submitted(retry.id, false, now);
+        }
+        h.unavailable(32_000);
+        h.restore();
+        assert!(h.tick(33_000).is_none());
+        assert!(
+            h.tick(36_000).is_none(),
+            "recovery cannot reset exhausted budget"
+        );
+        h.controller.refresh();
+        let old = h
+            .tick(37_000)
+            .expect("same exhausted error remains explicitly rearmable");
+        assert_eq!(old.episodes, first.episodes);
+        h.append_error(38_000);
+        let fresh = h
+            .tick(38_000)
+            .expect("new error is independent of old retry budget");
+        assert_ne!(fresh.episodes[0].episode.id, first.episodes[0].episode.id);
+        assert_eq!(fresh.episodes[0].session, first.episodes[0].session);
+        h.controller.submitted(old.id, true, 38_000);
+        h.controller.submitted(fresh.id, false, 38_000);
+        for now in [43_000, 48_000] {
+            assert!(h.tick(now - 1).is_none());
+            let retry = h.tick(now).expect("new error retains all three attempts");
+            assert_eq!(retry.episodes, fresh.episodes);
+            h.controller.submitted(retry.id, false, now);
+        }
+        assert!(h.tick(53_000).is_none());
+    }
+
+    // First submission actually fails; a partial lock scan must not relabel the
+    // unchanged error historical/acknowledged or discard either remaining retry.
+    #[test]
+    fn copilot_partial_scan_preserves_pending_retry_budget() {
+        let mut h = Harness::new("");
+        let first = h.first_error();
+        assert!(first.episodes[0].episode.id > 0);
+        h.controller.submitted(first.id, false, 21_250);
+        h.partial_scan(22_000);
+        assert!(h.tick(23_000).is_none());
+        h.controller.refresh();
+        assert!(h.tick(26_249).is_none());
+        let retry = h
+            .tick(26_250)
+            .expect("partial scan must not acknowledge failed submission");
+        assert_eq!(retry.episodes, first.episodes);
+        assert_eq!(
+            h.lines, 1,
+            "unchanged error must not be reparsed as history"
+        );
+        h.controller.submitted(retry.id, false, 26_500);
+        assert!(h.tick(31_499).is_none());
+        let last = h.tick(31_500).expect("second retry survives partial scan");
+        assert_eq!(last.episodes, first.episodes);
+        h.controller.submitted(last.id, false, 31_500);
+        assert!(
+            h.tick(36_500).is_none(),
+            "exactly three attempts, including before scan"
+        );
+        h.controller.refresh();
+        let rearmed = h
+            .tick(36_501)
+            .expect("undelivered error remains Refresh-rearmable");
+        assert_eq!(rearmed.episodes, first.episodes);
+        h.controller.submitted(rearmed.id, true, 36_501);
+        h.controller.refresh();
+        assert!(h.tick(42_000).is_none());
+    }
+
+    // Exhausted is NOT acknowledged: recovery cannot reset its three-attempt
+    // budget, and explicit Refresh still rearms the same error with 5s spacing.
+    #[test]
+    fn copilot_partial_scan_preserves_exhausted_refresh() {
+        let mut h = Harness::new("");
+        let first = h.first_error();
+        h.controller.submitted(first.id, false, 21_000);
+        for now in [26_000, 31_000] {
+            assert!(h.tick(now - 1).is_none());
+            let retry = h.tick(now).unwrap();
+            assert_eq!(retry.episodes, first.episodes);
+            h.controller.submitted(retry.id, false, now);
+        }
+        h.partial_scan(32_000);
+        assert!(
+            h.tick(33_000).is_none(),
+            "recovery cannot renew exhausted budget"
+        );
+        h.controller.refresh();
+        assert!(
+            h.tick(35_999).is_none(),
+            "Refresh cannot bypass submission spacing"
+        );
+        let rearmed = h
+            .tick(36_000)
+            .expect("partial scan must not acknowledge exhausted error");
+        assert_eq!(rearmed.episodes, first.episodes);
+        assert_eq!(
+            h.lines, 1,
+            "unchanged error must not be reparsed as history"
+        );
+        h.controller.submitted(rearmed.id, true, 36_000);
+        h.controller.refresh();
+        assert!(h.tick(42_000).is_none());
+    }
+
+    // Successful acknowledgement stays quiet across the SAME incomplete scan;
+    // retaining parser provenance must not replay old errors or hide new ones.
+    #[test]
+    fn copilot_partial_scan_preserves_acknowledged_error() {
+        let mut h = Harness::new("");
+        let first = h.first_error();
+        h.controller.submitted(first.id, true, 21_000);
+        h.partial_scan(22_000);
+        assert!(h.tick(23_000).is_none());
+        let recovered = &h.controller.snapshot().sources[0].sessions[0];
+        assert_eq!(recovered.instance_id, first.episodes[0].session.instance_id);
+        assert_eq!(
+            recovered.attention.as_ref(),
+            Some(&first.episodes[0].episode)
+        );
+        assert_eq!(h.lines, 1);
+        h.controller.refresh();
+        assert!(h.tick(29_000).is_none());
+        h.append_error(30_000);
+        let fresh = h.tick(30_000).expect("new append remains eligible");
+        assert_eq!(fresh.episodes[0].session, first.episodes[0].session);
+        assert_ne!(fresh.episodes[0].episode.id, first.episodes[0].episode.id);
+    }
+
+    // Same-lock, same-length log replacement is a REAL file identity boundary,
+    // even during source loss: replacement history stays quiet, later append alerts.
+    #[test]
+    fn copilot_historical_log_replacement_stays_quiet() {
+        let mut h =
+            Harness::new("{\"type\":\"session.error\",\"timestamp\":\"1970-01-01T00:00:19Z\"}\n");
+        assert!(h.tick(NOW).is_none());
+        let first = h.controller.snapshot().sources[0].sessions[0].clone();
+        assert!(!first.attention.as_ref().unwrap().notify);
+        let identity = file_identity(&h.log());
+        let length = fs::metadata(h.log()).unwrap().len();
+        h.unavailable(22_000);
+        let old = h.parked().join("copilot-0/events.jsonl");
+        fs::rename(&old, h.scratch.0.join("previous-events")).unwrap();
+        fs::write(
+            &old,
+            "{\"type\":\"session.error\",\"timestamp\":\"1970-01-01T00:00:21Z\"}\n",
+        )
+        .unwrap();
+        assert_ne!(file_identity(&old), identity);
+        assert_eq!(fs::metadata(&old).unwrap().len(), length);
+        h.restore();
+        assert!(h.tick(23_000).is_none());
+        let recovered = &h.controller.snapshot().sources[0].sessions[0];
+        assert_eq!(recovered.instance_id, first.instance_id);
+        assert_eq!(recovered.state, SessionState::Error);
+        assert!(!recovered.attention.as_ref().unwrap().notify);
+        h.controller.refresh();
+        assert!(h.tick(29_000).is_none());
+        h.append_error(30_000);
+        let fresh = h.tick(30_000).unwrap();
+        h.controller.submitted(fresh.id, true, 30_000);
+        assert!(h.tick(36_000).is_none());
+    }
+
+    // Ordinary observed truncation without source loss must keep historical
+    // suppression and allocate a distinct eligible ID for a later new error.
+    #[test]
+    fn copilot_observed_truncation_renews_error() {
+        let mut h = Harness::new("");
+        let first = h.first_error();
+        h.controller.submitted(first.id, true, 21_000);
+        fs::write(h.log(), "").unwrap();
+        assert!(h.tick(22_000).is_none());
+        h.append_error(23_000);
+        let new = h.tick(23_000).unwrap();
+        assert_eq!(new.episodes[0].session, first.episodes[0].session);
+        assert_ne!(new.episodes[0].episode.id, first.episodes[0].episode.id);
+    }
+
+    // Reconstruct ALL parser/worker state while a controller retains delivery
+    // history. The same lock is not a new instance and cannot restart error IDs.
+    #[test]
+    fn copilot_monitor_reconstruction_never_reuses_error_id() {
+        let mut h = Harness::new("");
+        let first = h.first_error();
+        h.controller.submitted(first.id, true, 21_000);
+        h.unavailable(22_000);
+        h.restore();
+        fs::write(h.log(), "").unwrap();
+        let clock = Arc::new(AtomicU64::new(23_000));
+        let observation_clock = clock.clone();
+        h.workers.stop();
+        h.workers = AttentionWorkers::with_clock(vec![h.source.clone()], 23_000, move || {
+            observation_clock.load(Ordering::SeqCst)
+        })
+        .unwrap();
+        let empty = poll_once(&mut h.workers, 23_000, |v| {
+            !v.sources[0].sessions.is_empty()
+        });
+        assert_eq!(empty.sources[0].sessions[0].state, SessionState::Idle);
+        assert_eq!(
+            empty.sources[0].sessions[0].instance_id,
+            first.episodes[0].session.instance_id
+        );
+        assert!(h.controller.tick(empty, 23_000).is_none());
+        h.append_error(24_000);
+        clock.store(24_000, Ordering::SeqCst);
+        let new = poll_once(&mut h.workers, 24_000, |v| {
+            v.sources[0].sessions[0].attention.is_some()
+        });
+        let request = h
+            .controller
+            .tick(new, 24_000)
+            .expect("reconstructed monitor cannot reuse acknowledged ID");
+        assert_eq!(request.episodes[0].session, first.episodes[0].session);
+        assert_ne!(request.episodes[0].episode.id, first.episodes[0].episode.id);
+    }
+}
+
 use std::{
     fs,
     io::Write,
@@ -970,7 +1522,8 @@ fn timestamped_copilot_error_during_blocked_read_is_not_offset_consumed() {
         request.episodes[0].episode.reason,
         EpisodeReason::SessionError
     );
-    assert_eq!(request.episodes[0].episode.id, 1);
+    let error_id = request.episodes[0].episode.id;
+    assert!(error_id > 0);
     controller.submitted(request.id, true, 23_000);
     assert!(controller.tick(read_again, 23_001).is_none());
     append(
@@ -990,7 +1543,7 @@ fn timestamped_copilot_error_during_blocked_read_is_not_offset_consumed() {
             .as_ref()
             .unwrap()
             .id,
-        1
+        error_id
     );
     workers.stop();
 }

@@ -616,7 +616,13 @@ fn copilot_sessions_do_not_replay_history_or_alert_for_tools() {
     append(&one, "{\"type\":\"session.error\"}\n");
     let updated = monitor.poll_at(NOW);
     let sessions = &updated.sources[0].sessions;
-    assert_eq!(sessions[0].attention.as_ref().unwrap().id, 2);
+    let historical_id = initial.sources[0].sessions[0]
+        .attention
+        .as_ref()
+        .unwrap()
+        .id;
+    assert!(historical_id > 0);
+    assert!(sessions[0].attention.as_ref().unwrap().id > historical_id);
     assert!(sessions[0].attention.as_ref().unwrap().notify);
     assert_eq!(sessions[1].state, SessionState::Idle);
     assert!(sessions[1].attention.is_none());
@@ -632,6 +638,69 @@ fn copilot_sessions_do_not_replay_history_or_alert_for_tools() {
     assert!(cleared.sources[0].sessions[0].attention.is_none());
     fs::remove_file(two.join("inuse.1.lock")).unwrap();
     assert_eq!(monitor.poll_at(NOW).sources[0].sessions.len(), 1);
+}
+
+// Separate monitors/sources can observe the SAME persisted file concurrently.
+// IDs must remain collision-free across those producer lifetimes, while each
+// monitor's unchanged error is stable and all initial history stays quiet.
+#[test]
+fn copilot_episode_ids_outlive_multiple_monitors_and_sources() {
+    let scratch = Scratch::new();
+    let config = scratch.config(&["copilot", "copilot"]);
+    let sources = config.resolved_sources().unwrap();
+    let first = copilot(&sources[0].path, "same", "");
+    let second = copilot(&sources[1].path, "same", "");
+    let mut left = monitor(&config);
+    let mut right = monitor(&config);
+    left.poll_at(NOW);
+    right.poll_at(NOW);
+    append(
+        &first,
+        "{\"type\":\"session.error\",\"timestamp\":\"1970-01-01T00:00:21Z\"}\n",
+    );
+    append(
+        &second,
+        "{\"type\":\"session.error\",\"timestamp\":\"1970-01-01T00:00:21Z\"}\n",
+    );
+    let a = left.poll_at(21_000);
+    let b = right.poll_at(21_000);
+    let mut ids = std::collections::HashSet::new();
+    for value in [&a, &b] {
+        for source in &value.sources {
+            let episode = source.sessions[0].attention.as_ref().unwrap();
+            assert!(episode.id > 0 && episode.notify);
+            assert!(
+                ids.insert(episode.id),
+                "process-lifetime IDs cannot collide"
+            );
+        }
+    }
+    for (before, after) in [(&a, left.poll_at(22_000)), (&b, right.poll_at(22_000))] {
+        for (old, current) in before.sources.iter().zip(&after.sources) {
+            assert_eq!(old.sessions[0].attention, current.sessions[0].attention);
+            assert_eq!(old.sessions[0].instance_id, current.sessions[0].instance_id);
+        }
+    }
+    drop(left);
+    drop(right);
+    let mut rebuilt = monitor(&config);
+    let historical = rebuilt.poll_at(23_000);
+    for source in &historical.sources {
+        let episode = source.sessions[0].attention.as_ref().unwrap();
+        assert!(
+            !episode.notify,
+            "reconstruction never replays historical errors"
+        );
+        assert!(ids.insert(episode.id), "reconstruction cannot recycle IDs");
+    }
+    append(
+        &first,
+        "{\"type\":\"session.error\",\"timestamp\":\"1970-01-01T00:00:24Z\"}\n",
+    );
+    let fresh = rebuilt.poll_at(24_000);
+    let episode = fresh.sources[0].sessions[0].attention.as_ref().unwrap();
+    assert!(episode.notify);
+    assert!(ids.insert(episode.id));
 }
 
 // Proves newline-only offsets retain partial appends and malformed/unknown/future input remains content-free.

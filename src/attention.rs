@@ -61,6 +61,7 @@ pub enum Diagnostic {
     SessionUnavailable,
     SessionOverflow,
     DeliveryHistoryOverflow,
+    EpisodeIdentityExhausted,
     InvalidPiStatus,
     OversizedPiStatus,
     StalePiStatus,

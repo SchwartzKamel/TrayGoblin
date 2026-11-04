@@ -69,21 +69,28 @@ Windows.
 
 ## Aggregate attention engine
 
-### M3 blocked checkpoint
+### M3 recovery checkpoint
 
-**Build STOPPED; candidate mechanisms below are not accepted correctness claims.**
+**M3 remains in progress and unaccepted; mechanisms below await candidate-bound review.**
 The [active plan](../.wgm/IMPLEMENTATION_PLAN.md) records accepted M1 `0d79111` and M2 `058ef74`
-(93 workspace tests). M3 candidate `e193b6c` is **BLOCKED/unaccepted after three recovery cycles**.
-Recorded evidence is 41 targeted / 122 workspace passes, rugged RUGGED, quality PASS, but
-**spec CHANGES-REQUESTED**.
+(93 workspace tests). Rejected M3 candidate `e193b6c` passed 41 targeted / 122 workspace tests
+but retained **spec CHANGES-REQUESTED** after three recovery cycles.
 
-The blocker is a source-reset/Copilot-episode collision: source failure clears Copilot parser
-state and resets its episode counter, while controller delivery history retains acknowledged
-identities. A subsequent new error can reuse an acknowledged episode identity and be suppressed.
-This is source-traced only, not runtime reproduced; diagnostic setup approval was denied.
-Passing checks do not resolve that dissent. Do not proceed to M4 integration.
-M4/M5 are pending, with no attention GUI or attention demo; M6 actual Windows/WSL interaction
-and performance remain blocked.
+M3.R4 reproduces that defect through synthetic files → real monitor → owned worker → the
+same controller: root loss, same-lock log truncation, an observed empty recovery baseline,
+then a NEW persisted error reuses an acknowledged ID and receives no request (Refresh
+also stays quiet). The regression compiles and assertion-fails against exact `e193b6c`
+sources; passing prior gates did not disprove it. The correction below is core evidence,
+not acceptance. The subsequent R4 candidate `edec9fa` passed 49 targeted / 132
+workspace tests and fresh rugged/spec checks, but quality review traced another
+boundary: an incomplete session lock scan still pruned the known parser. R4.1
+confirms this through the same real file → monitor → owned worker → controller path:
+failed submissions lose remaining retries, exhausted errors lose Refresh, and an
+unchanged acknowledged error is reclassified as new historical state. All three
+regressions compile and assertion-fail on exact `edec9fa` before production edits.
+The membership correction below preserves the R4 allocator and root-loss repair.
+M3 is still unaccepted. M4/M5 remain pending with no attention GUI/demo; M6 actual
+Windows/WSL interaction and performance remain blocked.
 
 ### Accepted aggregate path and candidate controller design
 
@@ -152,6 +159,37 @@ successful notification submission do not clear visible errors.
 Transient `SourceUnavailable` hides attention and drops pending requests but retains
 the bounded delivery slots until that source can confirm which instances remain;
 recovery of an already acknowledged episode does not replay it.
+
+Copilot observation IDs are opaque, allocated by a checked atomic process-lifetime
+sequence shared by all sources and monitor instances. They are not event ordinals,
+timestamps, log lengths or volatile parser counters. A controller can outlive a parser,
+worker or monitor, so none of those reconstructions may recycle an ID. Only process
+exit discards both the allocator and delivery history. The sequence never wraps;
+theoretical exhaustion returns an unavailable session with the content-free diagnostic
+`episode_identity_exhausted`, rather than risking a collision. No persisted ledger,
+provider body/ID field or pi protocol change is needed.
+
+Temporary source failure retains the existing bounded Copilot parser cache (at most
+64 sessions/source), while still publishing empty, explicitly unavailable snapshots.
+The same lifetime contract applies to incomplete scans: omitted/invalid candidates
+are not confirmed removals. Parser pruning uses typed `SourceMembership`, independently
+of the selected rows, and runs before admission so complete recovery immediately
+reclaims genuinely absent entries. A positively observed replacement lock still
+rebuilds that session's parser, including during an otherwise incomplete scan.
+
+Uncertainty never expands the 64-parser bound or silently evicts known provenance.
+When retained unknown entries fill it, a new candidate receives an `Unavailable` row
+and the existing fixed `session_overflow` diagnostic; its log is not consumed and
+it cannot claim healthy state. Complete membership recovery frees absent entries
+and permits admission again. Tests exercise ten generations of blocked admissions,
+same-instance recovery at capacity, positive lock replacement, and complete pruning.
+
+An unchanged log resumes the same known episode, acknowledgement, pending-attempt
+count and exhausted budget. Observed log shrink or file-identity replacement resets
+state/offsets to a quiet historical baseline; a subsequent new append gets a fresh
+process ID and its own delivery budget. Controller delivery policy, Refresh, membership
+retention, worker ownership, publisher expiry and observation-clock sampling are unchanged.
+
 Per-publication pi unavailability also retains slots by source and instance:
 stale/malformed placeholders know the filename instance ID, not the publisher's
 session ID. Such placeholders hide attention and cancel pending requests without

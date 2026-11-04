@@ -3,6 +3,7 @@ use std::{
     fs,
     io::{self, Read, Seek, SeekFrom},
     path::{Path, PathBuf},
+    sync::atomic::{AtomicU64, Ordering},
     time::SystemTime,
 };
 
@@ -353,7 +354,8 @@ impl SourceMonitor {
                 {
                     result.diagnose(Diagnostic::SourceUnavailable);
                 }
-                self.copilot.clear();
+                // Keep bounded known Copilot offsets/error provenance through
+                // temporary source loss; the returned snapshot is still unavailable.
                 self.pi_timestamps.clear();
                 return result;
             }
@@ -362,7 +364,6 @@ impl SourceMonitor {
             Ok(root) => root,
             Err(_) => {
                 result.diagnose(Diagnostic::SourceUnavailable);
-                self.copilot.clear();
                 self.pi_timestamps.clear();
                 return result;
             }
@@ -371,7 +372,6 @@ impl SourceMonitor {
             Ok(entries) => entries,
             Err(_) => {
                 result.diagnose(Diagnostic::SourceUnavailable);
-                self.copilot.clear();
                 self.pi_timestamps.clear();
                 return result;
             }
@@ -484,11 +484,27 @@ impl SourceMonitor {
                 }
             }
         }
+        // Membership, not the selected/validated rows, proves absence. Prune
+        // before admission so complete recovery immediately frees parser capacity.
+        self.copilot.retain(|name, session| {
+            !result.membership.complete
+                || result
+                    .membership
+                    .instances
+                    .contains(&format!("{name}:{}", session.lock))
+        });
         candidates.sort_by(|a, b| a.0.cmp(&b.0));
-        let mut present = std::collections::HashSet::new();
         for (name, path, lock, _directory_guard) in candidates {
-            present.insert(name.clone());
             let Some(lock) = lock else { continue };
+            if !self.copilot.contains_key(&name) && self.copilot.len() == MAX_SESSIONS {
+                // Unknown old instances keep their provenance, but cannot grow
+                // this cache or let an untracked new session claim healthy state.
+                result.diagnose(Diagnostic::SessionOverflow);
+                result
+                    .sessions
+                    .push(unavailable_session(&name, &format!("{name}:{lock}")));
+                continue;
+            }
             let session = self.copilot.entry(name.clone()).or_default();
             if session.lock != lock {
                 *session = CopilotSession {
@@ -510,7 +526,6 @@ impl SourceMonitor {
             }
             result.sessions.push(snapshot);
         }
-        self.copilot.retain(|name, _| present.contains(name));
         if self.source.kind == Provider::Pi {
             let remaining = MAX_SESSIONS - result.sessions.len();
             if result.unavailable_pi_statuses > remaining {
@@ -723,6 +738,232 @@ fn active_lock_identity(directory: &Path) -> io::Result<Option<String>> {
 #[cfg(test)]
 mod attention_io_tests {
     use super::*;
+    use std::io::Write;
+
+    // The final available ID is issued exactly once. Exhaustion stays a typed,
+    // visible failure forever, not a wrap to a previously acknowledged ID.
+    #[test]
+    fn copilot_episode_allocator_never_recycles_at_exhaustion() {
+        let sequence = AtomicU64::new(u64::MAX - 1);
+        assert_eq!(allocate_copilot_episode(&sequence), Ok(u64::MAX));
+        for _ in 0..3 {
+            assert_eq!(
+                allocate_copilot_episode(&sequence),
+                Err(Diagnostic::EpisodeIdentityExhausted)
+            );
+            assert_eq!(sequence.load(Ordering::Relaxed), u64::MAX);
+        }
+    }
+
+    // Real lock/log boundaries prove retained source-loss caches stay bounded,
+    // resume unchanged provenance, and still prune confirmed removal/replacement.
+    #[test]
+    fn copilot_source_loss_retains_bounded_cache_until_confirmed_removal() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("target/test-scratch/attention-copilot-cache")
+            .join(std::process::id().to_string());
+        let source = root.join("source");
+        fs::create_dir_all(&source).unwrap();
+        for i in 0..MAX_SESSIONS {
+            let session = source.join(format!("session-{i:02}"));
+            fs::create_dir(&session).unwrap();
+            fs::write(session.join("inuse.1.lock"), "").unwrap();
+            fs::write(session.join(EVENTS_FILE_NAME), "").unwrap();
+        }
+        let config = crate::config::MonitorConfig::parse(
+            &serde_json::json!({"sources":[{"id":"copilot","label":"Synthetic","kind":"copilot","path":source}]}).to_string()
+        ).unwrap();
+        let mut monitor = AttentionMonitor::new(config.resolved_sources().unwrap()).unwrap();
+        monitor.poll_at(20_000);
+        fs::write(
+            source.join("session-00/events.jsonl"),
+            "{\"type\":\"session.error\"}\n",
+        )
+        .unwrap();
+        let first = monitor.poll_at(21_000).sources[0].sessions[0].clone();
+        assert!(first.attention.as_ref().unwrap().notify);
+        let lines = monitor.lines_processed();
+        for cycle in 0..10 {
+            fs::rename(&source, root.join("offline")).unwrap();
+            let unavailable = monitor.poll_at(22_000 + cycle * 2);
+            assert_eq!(
+                unavailable.sources[0].diagnostics,
+                [Diagnostic::SourceUnavailable]
+            );
+            assert!(unavailable.sources[0].sessions.is_empty());
+            assert_eq!(monitor.sources[0].copilot.len(), MAX_SESSIONS);
+            fs::rename(root.join("offline"), &source).unwrap();
+            let restored = monitor.poll_at(22_001 + cycle * 2);
+            assert_eq!(restored.sources[0].sessions[0], first);
+            assert_eq!(
+                monitor.lines_processed(),
+                lines,
+                "unchanged log is not replayed"
+            );
+            assert_eq!(monitor.sources[0].copilot.len(), MAX_SESSIONS);
+        }
+        fs::remove_file(source.join("session-01/inuse.1.lock")).unwrap();
+        monitor.poll_at(23_000);
+        assert_eq!(monitor.sources[0].copilot.len(), MAX_SESSIONS - 1);
+        assert!(!monitor.sources[0].copilot.contains_key("session-01"));
+        fs::rename(
+            source.join("session-00/inuse.1.lock"),
+            source.join("session-00/inuse.2.lock"),
+        )
+        .unwrap();
+        let replaced = monitor.poll_at(24_000).sources[0].sessions[0].clone();
+        assert_ne!(replaced.instance_id, first.instance_id);
+        assert!(
+            !replaced.attention.as_ref().unwrap().notify,
+            "new lock initializes quiet history"
+        );
+        assert_ne!(
+            replaced.attention.as_ref().unwrap().id,
+            first.attention.as_ref().unwrap().id
+        );
+        fs::remove_dir_all(&root).unwrap();
+        monitor.poll_at(25_000); // Source loss is still unknown membership.
+        assert_eq!(monitor.sources[0].copilot.len(), MAX_SESSIONS - 1);
+        fs::create_dir_all(&source).unwrap();
+        assert!(monitor.poll_at(26_000).sources[0].membership.complete);
+        assert!(monitor.sources[0].copilot.is_empty());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    // Partial-scan churn cannot evict known provenance or grow the 64-parser
+    // cache. Refused admission is visibly unavailable; positive replacement and
+    // a complete recovery still reclaim state and admit previously blocked rows.
+    #[test]
+    fn copilot_partial_membership_bounds_admission_and_reclaims_absence() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("target/test-scratch/attention-copilot-partial-cache")
+            .join(std::process::id().to_string());
+        fs::create_dir_all(&root).unwrap();
+        let source = root.join("source");
+        fs::create_dir(&source).unwrap();
+        let create = |name: &str, events: &str| {
+            let session = source.join(name);
+            fs::create_dir(&session).unwrap();
+            fs::write(session.join("inuse.1.lock"), "").unwrap();
+            fs::write(session.join(EVENTS_FILE_NAME), events).unwrap();
+        };
+        for i in 0..MAX_SESSIONS {
+            create(&format!("known-{i:02}"), "");
+        }
+        let config = crate::config::MonitorConfig::parse(
+            &serde_json::json!({"sources":[{"id":"copilot","label":"Synthetic","kind":"copilot","path":source}]}).to_string()
+        ).unwrap();
+        let mut monitor = AttentionMonitor::new(config.resolved_sources().unwrap()).unwrap();
+        assert!(monitor.poll_at(20_000).sources[0].membership.complete);
+        for i in 0..2 {
+            fs::write(
+                source.join(format!("known-{i:02}/{EVENTS_FILE_NAME}")),
+                "{\"type\":\"session.error\"}\n",
+            )
+            .unwrap();
+        }
+        let first = monitor.poll_at(21_000);
+        let known = first.sources[0].sessions[0].clone();
+        let replaced = first.sources[0].sessions[1].clone();
+        assert!(known.attention.as_ref().unwrap().notify);
+        assert!(replaced.attention.as_ref().unwrap().notify);
+        assert_eq!(monitor.lines_processed(), 2);
+        for i in 0..MAX_SESSIONS {
+            fs::create_dir(source.join(format!("known-{i:02}/inuse.transient.lock"))).unwrap();
+        }
+        for generation in 0..10 {
+            for i in 0..8 {
+                create(
+                    &format!("new-{generation:02}-{i}"),
+                    "{\"type\":\"session.error\"}\n",
+                );
+            }
+            let partial = monitor.poll_at(22_000 + generation);
+            let result = &partial.sources[0];
+            assert!(!result.membership.complete);
+            assert_eq!(result.membership.instances.len(), 8);
+            assert!(result.diagnostics.contains(&Diagnostic::SessionUnavailable));
+            assert!(result.diagnostics.contains(&Diagnostic::SessionOverflow));
+            assert_eq!(result.sessions.len(), 8);
+            assert!(
+                result
+                    .sessions
+                    .iter()
+                    .all(|s| s.state == SessionState::Unavailable && s.attention.is_none())
+            );
+            assert_eq!(monitor.sources[0].copilot.len(), MAX_SESSIONS);
+            assert_eq!(
+                monitor.lines_processed(),
+                2,
+                "refused parsers must not consume logs"
+            );
+            assert_eq!(
+                monitor.sources[0].copilot["known-00"].attention,
+                known.attention
+            );
+            if generation < 9 {
+                for i in 0..8 {
+                    fs::remove_dir_all(source.join(format!("new-{generation:02}-{i}"))).unwrap();
+                }
+            }
+        }
+        fs::remove_dir(source.join("known-00/inuse.transient.lock")).unwrap();
+        fs::remove_dir(source.join("known-01/inuse.transient.lock")).unwrap();
+        fs::rename(
+            source.join("known-01/inuse.1.lock"),
+            source.join("known-01/inuse.2.lock"),
+        )
+        .unwrap();
+        let partial = monitor.poll_at(23_000);
+        let result = &partial.sources[0];
+        assert!(!result.membership.complete);
+        assert_eq!(
+            result.sessions[0], known,
+            "known parser resumes at capacity"
+        );
+        assert_ne!(result.sessions[1].instance_id, replaced.instance_id);
+        let replacement = result.sessions[1].attention.as_ref().unwrap();
+        assert!(
+            !replacement.notify,
+            "positive lock replacement starts quiet history"
+        );
+        assert_ne!(replacement.id, replaced.attention.as_ref().unwrap().id);
+        assert_eq!(monitor.sources[0].copilot.len(), MAX_SESSIONS);
+        assert_eq!(monitor.lines_processed(), 3);
+
+        // Only a complete membership scan confirms that these old instances are
+        // genuinely absent. Reclaim them BEFORE admitting the eight new parsers.
+        for i in 2..MAX_SESSIONS {
+            fs::remove_dir_all(source.join(format!("known-{i:02}"))).unwrap();
+        }
+        let recovered = monitor.poll_at(24_000);
+        let result = &recovered.sources[0];
+        assert!(result.membership.complete);
+        assert!(result.diagnostics.is_empty());
+        assert_eq!(result.sessions.len(), 10);
+        assert_eq!(result.sessions[0], known);
+        assert_eq!(result.sessions[1], partial.sources[0].sessions[1]);
+        assert_eq!(monitor.sources[0].copilot.len(), 10);
+        assert!(!monitor.sources[0].copilot.contains_key("known-02"));
+        assert!(
+            result.sessions[2..]
+                .iter()
+                .all(|s| s.state == SessionState::Error && !s.attention.as_ref().unwrap().notify)
+        );
+        assert_eq!(monitor.lines_processed(), 11);
+        fs::OpenOptions::new()
+            .append(true)
+            .open(source.join("new-09-0/events.jsonl"))
+            .unwrap()
+            .write_all(b"{\"type\":\"session.error\"}\n")
+            .unwrap();
+        let fresh = monitor.poll_at(25_000);
+        let new = fresh.sources[0].sessions[2].attention.as_ref().unwrap();
+        assert!(new.notify);
+        assert_ne!(new.id, result.sessions[2].attention.as_ref().unwrap().id);
+        assert_eq!(monitor.lines_processed(), 12);
+        fs::remove_dir_all(root).unwrap();
+    }
 
     // Proves stale-saturation recovery never grows retained timestamp storage beyond 64 identities.
     #[test]
@@ -803,6 +1044,19 @@ mod attention_io_tests {
     }
 }
 
+// Controllers can outlive ANY parser, source cache, worker or monitor. IDs must
+// therefore be opaque and non-recycling for the whole process, not per session.
+static COPILOT_EPISODES: AtomicU64 = AtomicU64::new(0);
+
+fn allocate_copilot_episode(sequence: &AtomicU64) -> Result<u64, Diagnostic> {
+    sequence
+        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |last| {
+            last.checked_add(1)
+        })
+        .map(|previous| previous + 1)
+        .map_err(|_| Diagnostic::EpisodeIdentityExhausted)
+}
+
 struct CopilotSession {
     lock: String,
     offset: u64,
@@ -814,7 +1068,6 @@ struct CopilotSession {
     attention: Option<AttentionEpisode>,
     run_started_at: Option<u64>,
     duration: Option<u64>,
-    episode: u64,
     event_file_identity: Option<String>,
 }
 
@@ -831,7 +1084,6 @@ impl Default for CopilotSession {
             attention: None,
             run_started_at: None,
             duration: None,
-            episode: 0,
             event_file_identity: None,
         }
     }
@@ -890,11 +1142,9 @@ impl CopilotSession {
                 .is_some_and(|id| id != &identity)
         {
             let lock = self.lock.clone();
-            let episode = self.episode;
             let directory = self.directory.take();
             *self = Self {
                 lock,
-                episode,
                 directory,
                 ..Self::default()
             };
@@ -928,7 +1178,10 @@ impl CopilotSession {
                         if future {
                             result.diagnose(Diagnostic::MalformedEvent);
                         } else {
-                            self.apply(event, !historical);
+                            self.apply(event, !historical).map_err(|diagnostic| {
+                                result.diagnose(diagnostic);
+                                io::Error::other("Copilot error identity exhausted")
+                            })?;
                         }
                     }
                     Some(ParsedEvent::Unsupported) => {}
@@ -947,7 +1200,7 @@ impl CopilotSession {
         Ok(())
     }
 
-    fn apply(&mut self, event: SessionEvent, notify: bool) {
+    fn apply(&mut self, event: SessionEvent, notify: bool) -> Result<(), Diagnostic> {
         let timestamp = event
             .timestamp
             .and_then(|t| u64::try_from(t.timestamp_millis()).ok());
@@ -968,10 +1221,10 @@ impl CopilotSession {
                 }
             }
             EventKind::SessionError => {
-                self.episode += 1;
+                let id = allocate_copilot_episode(&COPILOT_EPISODES)?;
                 self.state = SessionState::Error;
                 self.attention = Some(AttentionEpisode {
-                    id: self.episode,
+                    id,
                     reason: EpisodeReason::SessionError,
                     notify,
                 });
@@ -985,5 +1238,6 @@ impl CopilotSession {
             }
             EventKind::ToolExecutionComplete => {}
         }
+        Ok(())
     }
 }
