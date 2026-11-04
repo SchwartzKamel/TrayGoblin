@@ -13,8 +13,9 @@ M4 score/helper-scope metadata: `aa617e9`. M5 product matches reviewed4e5e3c1;
 all code gates/RUGGED/specPASS/qualityPASS stand. Final full-fleet audit0508 plus
 fresh five-role A08 closure0535 leave NO surviving Agent action in scope; AMBER
 O01 protected-root authorization/O02 genuine target-host evidence remain explicit.
-Last judged tier1=94.12 (M4); a fresh M5 validator follows this acceptance, then
-only if tier1>=95 may it open tiers2/3. No unrun score is claimed.
+Fresh M5 validator completed in tier order: tier1=97.35, tier2=98.33,
+tier3=97.54; overall97.74. Each prior tier cleared95 before the next opened.
+No native Windows evidence is implied by these CLI/offline-host judgments.
 
 ## Goal and boundaries
 One native Windows tray identifies pi/Copilot attention across Windows/local WSL.
@@ -147,6 +148,7 @@ reads can wake WSL; removing that source and restarting disables those reads.
   `9485a19ea81fa03763a11dcf8802132389db9b215d72a31d80ccd0a3e3f5e1a5`;
   PE `f8acac734ebf670cec55017a952664ff0dcb12a362659ea2a17c1503a56f3602`.
   Manifest honestly says pre-freezeaa617e98/dirty/unpublished; no official release.
+- **final independent validation / artifact record:** Fresh tiered judge reports97.35/98.33/97.54, overall97.74, source/runtime/digests inspected and ten file-free policy tests independently passed. Supplied actual-host/OCI/compiler evidence stays attributed, not called independent rerun. Boundary-combination partials remain documented; no substantiated new product blocker. Parent then reran COMPLETE exact chain from CLEAN commitfe6e301: exit0,141 Rust,56 installer/one explicit Windows shortcut skip,408 docs,14 real-host phases/5 adapter requests and separate restricted OCI; sibling checksum verified. Archive `dist/tray-goblin-0.1.0-windows-x86_64.zip`, SHA256a24f507f3faa928f40a69cd9b2eb255ac9946fa3fc38f8f3cee2f2ae061feba9; PE SHA256f8acac734ebf670cec55017a952664ff0dcb12a362659ea2a17c1503a56f3602. Packaged resources/build.json truthfully records cleanfe6e301 and published=false. Later commits are agent metadata only; product bytes remain identical to reviewed4e5e3c1. Old9485/35fdd hashes are historical prior archive generations, not the current artifact. Exact parent log RUN/final-clean-gate.log/exit0; judge RUN/M5.judge.log.
 - **CURRENT audit disposition:** Full-fleet0508 AMBER originally retained A08;
   `.wgm/docs/audit/2026-11-04T0535Z_attention-a08-closure.md` independently verifies
   A08 FIXED/CLOSED at5ab2703, with no Agent actions surviving. Complete five-role
@@ -197,10 +199,27 @@ No tracked history/runtime scratch was deleted; raw reports/refs remain.
   4e5e3c1; current AMBER0508 verifies those closed but A08 remains. Reports immutable;
   severity/execution/count dissent preserved, including denied principal replay,
   no verbatim online provisioning claim, and12-versus13 manifest normalization.
-- **OPERATIVE NEXT:** Five implementation tasks are accepted; product/metadata
-  reviews and five-role A08 closure are COMPLETE. Parent commits this acceptance
-  and invokes fresh judge-one.sh M5 (tier1>=95 before2, then3), recording actual
-  results rather than an unrun score. Then hand off the artifact for Operator M6:
+- **OPERATIVE NEXT:** M1–M5, current implementation reviews/RUGGED, five-role
+  A08 closure and final tiered judgment97.74 are COMPLETE. No further Agent author,
+  freeze/review/audit/judge or feature round is requested. Operator M6 is next:
   genuine Windows/WSL interaction/recovery/installation/Startup and matching-digest
-  performance. No repeat author/freezing/reviews, new feature round, tag or publication
-  is requested. Protected root AGENTS.md changes still need explicit scoped approval.
+  performance on the packaged executable. No tag/publication/promotion is authorized.
+  Protected root AGENTS.md changes still need explicit scoped approval.
+
+## Telemetry and consented workflow harvest
+Full-request wall time, allocated-lane capacity, active-agent time, parked time,
+peak concurrency, critical-path duration and total timed/missing turn/lane counts
+were not fully instrumented and are UNAVAILABLE, not estimated. Ready-to-test
+validation finished2026-11-04T05:47:11Z before this reporting overhead. Measured
+partial coordinator windows are6755s and10659s; these are subprocess elapsed
+windows, not whole-request wall/active-agent/lane time. Raw runner inventories:
+metrics.tsv12/12 timed author invocations,4445s CLI elapsed; strong-author-metrics.tsv
+6/6 timed,4786s CLI elapsed (includes timeout). Other parent/reviewer/diagnostic
+turns and lane inventory are missing. Do NOT call CLI lifetime agent-hours, billing
+or causal speedup. Final exact chain measured104s. Raw files retained externally.
+Project consent:true/auto_report:true was honored: a SINGLE pre-anonymized generic
+workflow lesson passed courier dry-run/scrub/residual guards and open-issue de-dup,
+then published to https://github.com/agent-frontier/wgm/issues/192. No project code,
+host identifiers, raw ledger or secrets were reported. The delegated courier's
+path-approval denial is recorded separately; authorized parent helper ran the
+actual safety gates and publication successfully.

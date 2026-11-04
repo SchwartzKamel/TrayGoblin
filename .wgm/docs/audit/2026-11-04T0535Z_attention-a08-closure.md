@@ -103,4 +103,3 @@ Previous report: [final0508 disposition](2026-11-04T0508Z_attention-final-dispos
 Read-only stdout delivery: no project/report/index/git/config writes, builds, tests, package operations, additional agents or holdout-content reads. Initial lookup of nonexistent `M5-A07` failed; the actual checkpoint-to-A08 comparison subsequently verified the delta.
 
 Dispatcher must capture this report and run `bash /home/lafiamafia/.agents/skills/wgm/scripts/audit.sh --check-report /home/lafiamafia/sandbox/TrayGoblin/.wgm/audit-run-b30krq/wgm-docs-writer.md` before filing. That check is **pending dispatcher execution**; structural completion is not qualitative GREEN.
-
