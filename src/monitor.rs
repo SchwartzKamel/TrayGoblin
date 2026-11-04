@@ -590,6 +590,7 @@ impl SourceMonitor {
 fn unavailable_session(session: &str, instance: &str) -> SessionSnapshot {
     SessionSnapshot {
         session_id: session.into(),
+        label: None,
         instance_id: instance.into(),
         model: None,
         directory: None,

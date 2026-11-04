@@ -575,6 +575,448 @@ use tray_goblin::{
     config::{MonitorConfig, Source},
 };
 
+// Exercises the actual production UI driver with nonempty publisher files,
+// real owned workers/parsers/controller and a submit callback. This is host
+// dispatch policy proof, NOT Shell_NotifyIconW execution or OS delivery proof.
+mod native_dispatch {
+    use super::*;
+    use std::{cell::RefCell, process::Command};
+    use tray_goblin::{
+        actions::{ActionError, LaunchTarget, TrayAction},
+        app::{
+            App, AppEffect, AppMessage, AttentionRuntime, Balloon, bounded_text, diagnostic_text,
+            menu_text, render_attention_view, safe_windows_path, session_identity, session_rows,
+            session_text, source_text, write_wide_buffer,
+        },
+        icon::IconVariant,
+        monitor::AttentionMonitor,
+    };
+
+    const EPOCH: u64 = 1_800_000_000_000;
+
+    struct Fixture {
+        root: PathBuf,
+        clock: Arc<AtomicU64>,
+        runtime: AttentionRuntime,
+    }
+    impl Fixture {
+        fn new() -> Self {
+            let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("target/test-scratch/native-dispatch")
+                .join(format!(
+                    "{}-{}",
+                    std::process::id(),
+                    NEXT.fetch_add(1, Ordering::Relaxed)
+                ));
+            let source = root.join("source-0");
+            fs::create_dir_all(&source).unwrap();
+            // Run the shipped publisher (no SDK patch/model/network, no timers).
+            // Its manual label traverses publisher -> worker -> parser -> UI.
+            let module =
+                Path::new(env!("CARGO_MANIFEST_DIR")).join("integrations/pi/tray-goblin.js");
+            let output = Command::new("node").args(["--input-type=module", "-e", &format!(r#"
+                import {{createStatusPublisher}} from {};
+                const p = createStatusPublisher({{sessionId:'shared-repo-session', model:'synthetic-model', directory:'C:/synthetic/shared', label:'review & 😀'}},
+                    {{directory:{}, now:()=>{EPOCH}}});
+                await p.publish(); await p.promptStart();
+            "#, serde_json::to_string(&format!("file://{}", module.display())).unwrap(), serde_json::to_string(&source).unwrap())])
+                .env_clear().env("PATH", std::env::var_os("PATH").unwrap()).env("HOME", &root).output().unwrap();
+            assert!(
+                output.status.success(),
+                "{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            assert!(output.stdout.is_empty());
+            let clock = Arc::new(AtomicU64::new(EPOCH));
+            let worker_clock = clock.clone();
+            let workers = AttentionWorkers::with_clock(sources(&["pi"], &root), EPOCH, move || {
+                worker_clock.load(Ordering::SeqCst)
+            })
+            .unwrap();
+            Self {
+                root,
+                clock,
+                runtime: AttentionRuntime::new(workers),
+            }
+        }
+        fn cycle(&mut self, poll: bool, refresh: bool, submit: impl FnMut(&Balloon) -> bool) {
+            let clock = self.clock.clone();
+            self.runtime
+                .cycle(poll, refresh, || clock.load(Ordering::SeqCst), submit);
+        }
+        fn await_input(&mut self, submit: &mut impl FnMut(&Balloon) -> bool) {
+            self.cycle(true, false, &mut *submit);
+            let deadline = Instant::now() + Duration::from_secs(1);
+            loop {
+                self.clock.fetch_add(1, Ordering::SeqCst);
+                self.cycle(false, false, &mut *submit);
+                if self.runtime.snapshot().sources[0]
+                    .sessions
+                    .iter()
+                    .any(|s| s.state == SessionState::InputRequired)
+                {
+                    break;
+                }
+                assert!(
+                    Instant::now() < deadline,
+                    "real worker publication not observed"
+                );
+                thread::sleep(Duration::from_millis(1));
+            }
+        }
+        fn heartbeat(&self) {
+            let source = self.root.join("source-0");
+            let path = fs::read_dir(source)
+                .unwrap()
+                .map(|e| e.unwrap().path())
+                .find(|p| p.extension().is_some_and(|ext| ext == "json"))
+                .unwrap();
+            let mut value: serde_json::Value =
+                serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+            value["updatedAt"] = json!(self.clock.load(Ordering::SeqCst));
+            fs::write(path, value.to_string()).unwrap();
+        }
+    }
+    impl Drop for Fixture {
+        fn drop(&mut self) {
+            self.runtime.stop();
+            // Runtime stop deliberately never joins a blocked provider reader.
+            let _ = fs::remove_dir_all(&self.root);
+        }
+    }
+
+    // Kills omitted dispatch and premature acknowledgement: a failed callback
+    // must really execute, retry from ACTUAL completion +5s, then ack only success.
+    #[test]
+    fn production_dispatch_uses_epoch_completion_and_success_only_ack() {
+        let mut f = Fixture::new();
+        let calls = RefCell::new(Vec::new());
+        let clock = f.clock.clone();
+        f.await_input(&mut |balloon: &Balloon| {
+            calls.borrow_mut().push(balloon.clone());
+            assert!(balloon.body.contains("review & 😀"));
+            assert!(balloon.body.contains("shared-repo-ses…"));
+            assert!(balloon.body.contains("Input required"));
+            assert!(balloon.title.encode_utf16().count() < 64);
+            assert!(balloon.body.encode_utf16().count() < 256);
+            clock.fetch_add(3_000, Ordering::SeqCst); // a slow real adapter completion
+            false
+        });
+        assert_eq!(
+            calls.borrow().len(),
+            1,
+            "omitted production submit is a failure"
+        );
+        assert!(f.runtime.submission_failed());
+        let completed = f.clock.load(Ordering::SeqCst);
+        f.clock.store(completed + 4_999, Ordering::SeqCst);
+        f.cycle(false, true, |_| {
+            panic!("Refresh cannot bypass completion spacing")
+        });
+        f.clock.store(completed + 5_000, Ordering::SeqCst);
+        f.cycle(false, false, |balloon| {
+            calls.borrow_mut().push(balloon.clone());
+            true
+        });
+        assert_eq!(calls.borrow().len(), 2, "failure must remain retryable");
+        assert!(!f.runtime.submission_failed());
+        assert_eq!(
+            f.runtime.snapshot().sources[0].sessions[0].label.as_deref(),
+            Some("review & 😀")
+        );
+        // Reconstructing/re-registering an icon view never constructs a controller.
+        for i in 1..=4 {
+            let view = render_attention_view(f.runtime.snapshot(), None, false);
+            assert_eq!(view.variant, IconVariant::AttentionNeeded);
+            f.clock.store(completed + 5_000 + i, Ordering::SeqCst);
+            f.cycle(false, true, |_| {
+                panic!("successful submission must not replay")
+            });
+        }
+        // Uptime would classify this current epoch publication as future. The
+        // real parser/worker path above instead keeps a live input row.
+        assert!(f.runtime.snapshot().sources[0].diagnostics.is_empty());
+    }
+
+    // Real driver exhaustion stays visible, Refresh rearms only undelivered
+    // work, and rearm keeps the completion-based retry deadline intact.
+    #[test]
+    fn production_dispatch_exhaustion_and_refresh_preserve_attention() {
+        let mut f = Fixture::new();
+        let mut calls = Vec::new();
+        f.await_input(&mut |balloon: &Balloon| {
+            calls.push(balloon.clone());
+            false
+        });
+        let first = f.clock.load(Ordering::SeqCst);
+        f.clock.store(first + 5_000, Ordering::SeqCst);
+        f.cycle(false, false, |b| {
+            calls.push(b.clone());
+            false
+        });
+        // Keep the actual publisher timestamp fresh before the third attempt.
+        f.clock.store(first + 9_000, Ordering::SeqCst);
+        f.heartbeat();
+        f.cycle(true, false, |_| panic!("too early for retry"));
+        let deadline = Instant::now() + Duration::from_secs(1);
+        while f.runtime.snapshot().sources[0].sessions[0]
+            .publisher_expires_at_ms
+            .unwrap()
+            < first + 19_000
+        {
+            f.clock.fetch_add(1, Ordering::SeqCst);
+            f.cycle(false, false, |_| panic!("too early for retry"));
+            assert!(Instant::now() < deadline);
+            thread::sleep(Duration::from_millis(1));
+        }
+        f.clock.store(first + 10_000, Ordering::SeqCst);
+        f.cycle(false, false, |b| {
+            calls.push(b.clone());
+            false
+        });
+        assert_eq!(calls.len(), 3);
+        f.clock.store(first + 15_000, Ordering::SeqCst);
+        f.cycle(false, false, |_| {
+            panic!("three-attempt budget must exhaust")
+        });
+        assert_eq!(
+            render_attention_view(f.runtime.snapshot(), None, true).variant,
+            IconVariant::AttentionNeeded
+        );
+        f.cycle(false, true, |b| {
+            calls.push(b.clone());
+            true
+        });
+        // Same controller tick is deliberately coalesced, so deliver on next tick.
+        f.clock.fetch_add(1, Ordering::SeqCst);
+        f.cycle(false, false, |b| {
+            calls.push(b.clone());
+            true
+        });
+        assert_eq!(calls.len(), 4);
+        f.clock.fetch_add(1, Ordering::SeqCst);
+        f.cycle(false, true, |_| {
+            panic!("Refresh must not rearm acknowledged work")
+        });
+    }
+
+    // Actual UI-cycle/Refresh/stop/drop must not read or join a blocked source;
+    // a second real parser still progresses. These are controlled host latency
+    // bounds, not manufactured Windows performance/resource measurements.
+    #[test]
+    fn production_dispatch_drain_refresh_and_stop_do_not_wait_for_source_io() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("target/test-scratch/native-blocked")
+            .join(format!(
+                "{}-{}",
+                std::process::id(),
+                NEXT.fetch_add(1, Ordering::Relaxed)
+            ));
+        let configured = sources(&["pi", "copilot"], &root);
+        fs::create_dir_all(&configured[0].path).unwrap();
+        let copilot = configured[1].path.join("live");
+        fs::create_dir_all(&copilot).unwrap();
+        fs::write(copilot.join("inuse.1.lock"), "").unwrap();
+        fs::write(copilot.join("workspace.yaml"), "cwd: C:/synthetic/shared\n").unwrap();
+        fs::write(
+            copilot.join("events.jsonl"),
+            "{\"type\":\"assistant.turn_start\"}\n",
+        )
+        .unwrap();
+        let (entered_tx, entered_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        let (finished_tx, finished_rx) = mpsc::channel();
+        let mut release_rx = Some(release_rx);
+        let workers = AttentionWorkers::with_readers(configured, EPOCH, |source| {
+            let mut monitor = AttentionMonitor::new(vec![source.clone()]).unwrap();
+            if source.kind == tray_goblin::config::Provider::Pi {
+                let mut release = Some(release_rx.take().unwrap());
+                let entered = entered_tx.clone();
+                let finished = finished_tx.clone();
+                Box::new(move |now| {
+                    if let Some(release) = release.take() {
+                        entered.send(()).unwrap();
+                        release.recv().unwrap();
+                    }
+                    let snapshot = monitor.poll_at(now).sources.remove(0);
+                    finished.send(()).unwrap();
+                    snapshot
+                })
+            } else {
+                Box::new(move |now| monitor.poll_at(now).sources.remove(0))
+            }
+        })
+        .unwrap();
+        let mut runtime = AttentionRuntime::new(workers);
+        runtime.cycle(true, true, || EPOCH, |_| panic!("working is quiet"));
+        entered_rx.recv_timeout(Duration::from_secs(1)).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(1);
+        let mut now = EPOCH;
+        loop {
+            now += 1;
+            let start = Instant::now();
+            runtime.cycle(false, true, || now, |_| panic!("working is quiet"));
+            assert!(start.elapsed() < Duration::from_millis(250));
+            if runtime.snapshot().sources[1]
+                .sessions
+                .iter()
+                .any(|session| session.state == SessionState::Working)
+            {
+                break;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "native source must progress independently"
+            );
+            thread::sleep(Duration::from_millis(1));
+        }
+        let start = Instant::now();
+        runtime.stop();
+        drop(runtime);
+        assert!(start.elapsed() < Duration::from_millis(250));
+        release_tx.send(()).unwrap();
+        finished_rx.recv_timeout(Duration::from_secs(1)).unwrap();
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    // R8 text is bounded UTF16 data, never accelerator/control syntax; session
+    // entries remain attention-first even when notification submission fails.
+    #[test]
+    fn native_text_counts_capabilities_identity_and_path_actions_are_safe() {
+        let configured = sources(&["pi", "copilot"], Path::new("C:/synthetic"));
+        let mut pi = source_snapshot(
+            &configured[0],
+            vec![
+                session("idle", SessionState::Idle, 0),
+                session("waiting", SessionState::InputRequired, 1),
+            ],
+        );
+        pi.source.label = "WSL & manual\tlabel".into();
+        pi.sessions[1].label = Some("review & 😀".into());
+        pi.sessions[1].directory = Some("/home/synthetic/shared".into());
+        pi.diagnostics.push(Diagnostic::FuturePiStatus);
+        let mut copilot = source_snapshot(
+            &configured[1],
+            vec![session("copilot", SessionState::Working, 0)],
+        );
+        copilot.source.path = PathBuf::from("C:/synthetic/copilot-state");
+        copilot.sessions[0].directory = Some("C:/synthetic/shared".into());
+        let snapshot = AttentionSnapshot {
+            sources: vec![pi, copilot],
+        };
+        let rows = session_rows(&snapshot);
+        assert_eq!(rows[0].1.session_id, "waiting");
+        assert!(session_text(rows[0].0, rows[0].1).contains("review & 😀"));
+        assert!(source_text(&snapshot.sources[1]).contains("input: unavailable"));
+        assert!(source_text(&snapshot.sources[0]).contains("input: explicit dialogs"));
+        assert!(diagnostic_text(Diagnostic::FuturePiStatus).contains("clock"));
+        let view = render_attention_view(&snapshot, None, false);
+        assert!(view.tooltip.contains("A1 W1 I1 U0 D1"));
+        assert!(!view.tooltip.contains("review &&"));
+        assert!(view.tooltip.contains("review & 😀"));
+        assert!(view.tooltip.contains("waiting"));
+        for capacity in [0, 1, 2, 63, 64, 127, 128, 255, 256] {
+            let value = format!("{}😀x\0\n&", "😀".repeat(200));
+            let text = bounded_text(&value, capacity);
+            assert!(text.encode_utf16().count() <= capacity);
+            let mut out = vec![1u16; capacity];
+            write_wide_buffer(&mut out, &value);
+            if capacity > 0 {
+                assert_eq!(out[capacity - 1], 0);
+                let end = out.iter().position(|u| *u == 0).unwrap();
+                assert!(String::from_utf16(&out[..end]).is_ok());
+            }
+        }
+        assert_eq!(menu_text("worker & name\t\n\0"), "worker && name   ");
+        for path in [
+            "/home/user/repo",
+            "file:///private",
+            "C:relative",
+            "C:/bad\"path",
+            "C:/bad\npath",
+            "\\\\.\\device",
+            "C:/path:stream",
+        ] {
+            assert!(!safe_windows_path(path), "{path}");
+        }
+        for path in [
+            "C:/synthetic/shared",
+            "C:\\synthetic\\shared",
+            "\\\\wsl.localhost\\Ubuntu\\home\\synthetic",
+        ] {
+            assert!(safe_windows_path(path), "{path}");
+        }
+        let mut app = App::new(
+            &MonitorConfig::default(),
+            None,
+            Some(PathBuf::from("C:/synthetic/settings.json")),
+        );
+        app.update_attention(snapshot.clone(), true);
+        let effects = app.handle(AppMessage::MenuCommand {
+            action: TrayAction::OpenInVsCode,
+            now_ms: 10,
+        });
+        assert_eq!(
+            app.last_action_error(),
+            Some(ActionError::UnsafeWindowsPath)
+        );
+        assert!(
+            !effects
+                .iter()
+                .any(|e| matches!(e, AppEffect::Launch { .. }))
+        );
+        assert!(
+            app.render_view()
+                .tooltip
+                .contains("unmapped or unsafe paths")
+        );
+        let logs = app.action_context().active_session.unwrap();
+        assert!(logs.starts_with("C:/synthetic/copilot-state"));
+        assert!(!logs.to_string_lossy().contains("source-0"));
+        let effects = app.handle(AppMessage::MenuCommand {
+            action: TrayAction::ViewCopilotLogs,
+            now_ms: 10,
+        });
+        assert!(effects.contains(&AppEffect::Launch {
+            action: TrayAction::ViewCopilotLogs,
+            target: LaunchTarget::Folder { directory: logs }
+        }));
+        app.select_session(session_identity(
+            &snapshot.sources[1],
+            &snapshot.sources[1].sessions[0],
+        ));
+        let effects = app.handle(AppMessage::MenuCommand {
+            action: TrayAction::OpenInVsCode,
+            now_ms: 11,
+        });
+        assert!(effects.contains(&AppEffect::Launch {
+            action: TrayAction::OpenInVsCode,
+            target: LaunchTarget::Editor {
+                directory: PathBuf::from("C:/synthetic/shared")
+            }
+        }));
+        // A pi-only configuration can never redirect View Copilot logs to pi.
+        app.update_attention(
+            AttentionSnapshot {
+                sources: vec![snapshot.sources[0].clone()],
+            },
+            false,
+        );
+        assert!(app.action_context().active_session.is_none());
+        assert!(app.action_context().session_root.is_none());
+        let effects = app.handle(AppMessage::MenuCommand {
+            action: TrayAction::ViewCopilotLogs,
+            now_ms: 12,
+        });
+        assert_eq!(app.last_action_error(), Some(ActionError::NoSessionFolder));
+        assert!(
+            !effects
+                .iter()
+                .any(|e| matches!(e, AppEffect::Launch { .. }))
+        );
+    }
+}
+
 const NOW: u64 = 20_000;
 static NEXT: AtomicU64 = AtomicU64::new(0);
 
@@ -596,6 +1038,7 @@ fn sources(kinds: &[&str], root: &Path) -> Vec<Source> {
 fn session(id: &str, state: SessionState, episode: u64) -> SessionSnapshot {
     SessionSnapshot {
         session_id: id.into(),
+        label: None,
         instance_id: format!("instance-{id}"),
         directory: Some("/synthetic/shared".into()),
         model: Some("synthetic".into()),

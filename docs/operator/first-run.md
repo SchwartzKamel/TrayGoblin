@@ -2,83 +2,104 @@
 
 **Audience:** Operators
 
-This page describes what TrayGoblin does the first time it starts, and how to confirm it is
-working correctly in under a minute.
+TrayGoblin is one native Windows notification-area icon: no window, console,
+dashboard, background service, or terminal control. A second launch in the same
+interactive Windows session exits quietly. Settings changes require a restart.
 
-## What happens at startup
+## Startup
 
-1. TrayGoblin reads `%APPDATA%\TrayGoblin\config.json` if that file exists. A missing file is
-   normal on a first run and means the documented defaults are used.
-2. It resolves the Copilot session folder: the `sessionRoot` value from configuration when set,
-   otherwise `%USERPROFILE%\.copilot\session-state`.
-3. It registers a notification-area icon and starts a timer at the configured polling interval
-   (1,000 ms by default).
-4. It polls immediately, so the first state appears without waiting a full interval.
+1. Read `%APPDATA%\TrayGoblin\config.json` once; a missing file uses defaults.
+2. Start independent source workers for native Copilot
+   (`%USERPROFILE%\.copilot\session-state`) and pi
+   (`%USERPROFILE%\.traygoblin\pi`). A missing implicit pi folder is normal.
+3. Register the icon and request the first poll immediately. The timer only
+   requests/drains bounded worker snapshots; it never reads provider files or
+   waits for a blocked worker. Default polling is 1,000 ms.
 
-TrayGoblin has no window, no console, and no dashboard. The icon, its tooltip, and its right-click
-menu are the entire interface.
+An explicit `sources` array replaces both defaults; `[]` disables monitoring.
+See [Configuration](configuration.md) for native/custom/WSL examples and limits.
+No WSL discovery or launch command is used. Reading an explicitly configured UNC
+root can itself wake or keep WSL running. Remove that source and restart the tray
+to disable those reads. An inaccessible source degrades visibly without blocking
+other sources.
 
-## The first state you will see
+## Give same-repository terminals a manual label
 
-With Copilot CLI closed, the tray shows **Idle**. That is correct: Idle means "no Copilot turn is
-in progress", including the case where no Copilot session is active at all.
+Load the opt-in pi extension with a different label in each terminal. Example
+paths assume a checkout at `C:\src\TrayGoblin` or `/home/operator/TrayGoblin`:
 
-## Confirm the magic moment
-
-1. Open a terminal in a repository and start GitHub Copilot CLI.
-2. Send a prompt.
-3. Within two polling intervals the icon changes to **Working**.
-4. When the turn finishes, the icon returns to **Idle** and the tooltip gains a
-   `Last turn: <duration>` line.
-
-Hover the icon at each step. A Working tooltip looks like this:
-
-```text
-TrayGoblin — Working
-Model: gpt-5.6-sol
-Repo: octo-org/content-free-demo
-Last turn: 2.4 s
+```powershell
+# Native Windows PowerShell, before starting pi:
+$env:TRAY_GOBLIN_LABEL = 'review'
+pi --extension C:\src\TrayGoblin\integrations\pi\tray-goblin.js
+# Another terminal can use 'build', even in the same working directory.
 ```
 
-Only lines whose values are known are shown. When no repository is available, the tooltip shows a
-`Dir:` line with the active directory instead. See
-[Status reference](status-reference.md) for every line and state.
+```sh
+# Inside WSL (not a Windows path):
+TRAY_GOBLIN_LABEL=build pi --extension /home/operator/TrayGoblin/integrations/pi/tray-goblin.js
+```
 
-## Release verification handoff
+For WSL, explicitly add a pi source such as
+`\\wsl.localhost\Ubuntu\home\operator\.traygoblin\pi` to the **Windows** tray's
+configuration. The default status folder belongs to the home of the process
+running pi, not to the Windows consumer. `TRAY_GOBLIN_STATUS_DIR` can override it.
+See the [pi integration](../../integrations/pi/README.md) for persistent opt-in
+installation/removal. TrayGoblin never changes pi settings automatically.
 
-If you are validating a build for publication, this first-run journey is release evidence rather
-than an informal smoke test. Record the date, Windows edition and build number, and pass/fail for
-each item in the [Manual Windows checklist](../agent/testing.md#manual-windows-checklist). Send that
-record and the performance numbers to the Agent preparing the release. A preview must not be
-published until the interaction checklist passes; stable promotion additionally requires the
-performance gate.
+Labels are optional user-supplied metadata: at most 64 UTF-8 bytes after control
+removal/truncation, then trimmed; blank means unlabeled. They are not pi's automatic
+session name, a prompt summary, or a terminal title. Restart pi to change its
+inherited environment. Session and instance IDs distinguish unlabeled terminals.
 
-## The right-click menu
+## Confirm the attention journey
+
+1. Start pi with the extension. Ordinary Idle shows no notification.
+2. Open an explicit blocking dialog (including a manual extension dialog). A
+   single balloon submission identifies the source, manual label and session.
+3. Right-click the tray: the session remains at the top as **Input required**
+   even if Windows/Focus Assist suppresses the balloon.
+4. Answer or cancel the dialog. The underlying Idle/Working/Error state returns.
+5. A final pi run error or a new persisted Copilot session error also requests
+   attention. Successful completion, ordinary Idle and recovered tool failures
+   stay quiet. Passive Copilot input detection is **unavailable**, not inferred.
+
+A successful `Shell_NotifyIconW` submission is **not proof Windows displayed a
+notification**. Use the persistent list if notifications are suppressed. Real
+Windows/WSL delivery/recovery and resource measurements are separate release
+checks; Linux tests/cross-compilation do not substitute for them.
+
+## Right-click menu
+
+All sessions persist in an attention-first list. Each submenu shows content-free
+source/session/instance IDs, manual label, model, directory and available timing
+(as separate bounded fields).
+Choose **Use for Open in VS Code** to select a row; this does not launch anything
+or focus/control a terminal. Without a selection the first attention row wins.
+Source submenus show provider capabilities, unavailable pi-file counts and fixed
+safe diagnostics (including stale/future clocks and tracking faults).
 
 | Command | What it does |
 |---|---|
-| **Refresh now** | Polls immediately instead of waiting for the next timer tick |
-| **Open in VS Code** | Opens the active Copilot directory in VS Code |
-| **View Copilot logs** | Opens the active Copilot session directory, falling back to the Session folder |
-| **Open settings** | Creates `config.json` with documented defaults if it is missing, then opens it |
-| **Quit** | Exits TrayGoblin; the Startup shortcut still launches it at your next sign-in |
+| **Refresh now** | Requests a poll immediately; rearms exhausted *undelivered* episodes, without bypassing the minimum five seconds since submission completion |
+| **Open in VS Code** | Opens the selected/default session's native Windows directory |
+| **View Copilot logs** | Opens a live Copilot session folder, falling back only to a configured Copilot root; never pi conversations/status |
+| **Open settings** | Creates default `config.json` if missing and opens it; restart after edits |
+| **Quit** | Stops requests, removes the icon and exits without joining blocked source reads |
 
-If a command has nothing to open — for example **Open in VS Code** before any Copilot session has
-reported a directory — the tooltip shows a short, content-free explanation such as
-`Open in VS Code is unavailable: no active Copilot directory is known`. No path, session
-identifier, or operating-system message is ever shown.
+Unmapped POSIX/WSL working directories intentionally return a fixed safe action
+error: **use the terminal for unmapped or unsafe paths**. There is no implicit
+POSIX-to-Windows conversion or WSL/editor command execution. Configured Windows
+UNC source roots remain valid for **View Copilot logs**. Action errors never
+include OS exception text or private content.
 
-## Startup behaviour
-
-The installer adds `TrayGoblin.lnk` to your per-user Startup folder, so TrayGoblin starts at sign
-in. If Windows Explorer is still starting when TrayGoblin launches, the notification-area icon is
-re-registered automatically on the next timer tick and whenever Explorer restarts, so a missing
-icon recovers by itself.
+Explorer restarts re-add the icon, not the workers/controller: acknowledged
+notifications do not replay, and failed submissions are never acknowledged.
+The per-user Startup shortcut still launches TrayGoblin at your next sign-in.
 
 ## Next steps
 
-- [Status reference](status-reference.md) — what each state and tooltip line means.
-- [Configuration](configuration.md) — change the polling interval or point at another session
-  folder.
-- [Privacy](privacy.md) — exactly what is read.
-- [Troubleshooting](troubleshooting.md) — no icon, a stuck state, or a startup error dialog.
+- [Status reference](status-reference.md) — states, counts and delivery limits.
+- [Configuration](configuration.md) — sources and polling cadence.
+- [Privacy](privacy.md) — prohibited content.
+- [Troubleshooting](troubleshooting.md) — startup and unavailable sources.

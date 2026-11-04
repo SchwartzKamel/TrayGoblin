@@ -96,6 +96,7 @@ pub enum LaunchTarget {
 pub enum ActionError {
     NotLaunchable(TrayAction),
     NoActiveDirectory,
+    UnsafeWindowsPath,
     NoSessionFolder,
     NoSettingsPath,
     SettingsUnavailable,
@@ -111,6 +112,9 @@ impl fmt::Display for ActionError {
             Self::NoActiveDirectory => write!(
                 f,
                 "Open in VS Code is unavailable: no active Copilot directory is known"
+            ),
+            Self::UnsafeWindowsPath => f.write_str(
+                "Open in VS Code is unavailable: use the terminal for unmapped or unsafe paths",
             ),
             Self::NoSessionFolder => write!(
                 f,

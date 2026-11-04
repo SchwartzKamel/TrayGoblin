@@ -9,7 +9,12 @@ use std::{path::PathBuf, time::Duration};
 
 use crate::{
     actions::{ActionContext, ActionError, LaunchTarget, TrayAction, resolve_launch_target},
-    config::MonitorConfig,
+    attention::{
+        AttentionController, AttentionSnapshot, Diagnostic, EpisodeReason, NotificationRequest,
+        SessionIdentity, SessionSnapshot, SessionState, SourceSnapshot,
+    },
+    attention_worker::AttentionWorkers,
+    config::{MonitorConfig, Provider},
     icon::IconVariant,
     status::{AttentionReason, StatusSnapshot},
 };
@@ -79,6 +84,9 @@ pub struct App {
     snapshot: StatusSnapshot,
     last_action_error: Option<ActionError>,
     published_view: Option<TrayView>,
+    aggregate: Option<AttentionSnapshot>,
+    selected: Option<SessionIdentity>,
+    submission_failed: bool,
 }
 
 impl App {
@@ -96,6 +104,9 @@ impl App {
             snapshot: StatusSnapshot::default(),
             last_action_error: None,
             published_view: None,
+            aggregate: None,
+            selected: None,
+            submission_failed: false,
         }
     }
 
@@ -156,7 +167,7 @@ impl App {
                 effects
             }
             TrayAction::Quit => vec![AppEffect::Quit],
-            _ => match resolve_launch_target(action, &self.action_context()) {
+            _ => match self.resolve_action(action) {
                 Ok(target) => {
                     self.last_action_error = None;
                     let mut effects = self.publish_view();
@@ -171,7 +182,85 @@ impl App {
         }
     }
 
+    fn resolve_action(&self, action: TrayAction) -> Result<LaunchTarget, ActionError> {
+        if action == TrayAction::OpenInVsCode {
+            if let Some((_, session)) = self.selected_session() {
+                if session
+                    .directory
+                    .as_deref()
+                    .is_some_and(|path| !safe_windows_path(path))
+                {
+                    return Err(ActionError::UnsafeWindowsPath);
+                }
+            }
+        }
+        resolve_launch_target(action, &self.action_context())
+    }
+
+    /// Worker snapshots contain metadata only; this method never opens provider files.
+    pub fn update_attention(
+        &mut self,
+        snapshot: AttentionSnapshot,
+        submission_failed: bool,
+    ) -> Vec<AppEffect> {
+        self.aggregate = Some(snapshot);
+        self.submission_failed = submission_failed;
+        self.publish_view()
+    }
+
+    pub fn attention_snapshot(&self) -> Option<&AttentionSnapshot> {
+        self.aggregate.as_ref()
+    }
+
+    /// Selection only chooses the existing editor action's target; no terminal control.
+    pub fn select_session(&mut self, identity: SessionIdentity) {
+        self.selected = Some(identity);
+    }
+
+    fn selected_session(&self) -> Option<(&SourceSnapshot, &SessionSnapshot)> {
+        let rows = session_rows(self.aggregate.as_ref()?);
+        rows.iter()
+            .copied()
+            .find(|(source, session)| {
+                self.selected.as_ref() == Some(&session_identity(source, session))
+            })
+            .or_else(|| rows.first().copied())
+    }
+
     pub fn action_context(&self) -> ActionContext {
+        if let Some(snapshot) = &self.aggregate {
+            let active_directory = self.selected_session().and_then(|(_, session)| {
+                (session.state != SessionState::Unavailable)
+                    .then_some(session)
+                    .and_then(|session| session.directory.as_deref())
+                    .filter(|path| safe_windows_path(path))
+                    .map(PathBuf::from)
+            });
+            // Logs ALWAYS select a Copilot source, never a pi status/conversation path.
+            let copilot = session_rows(snapshot)
+                .into_iter()
+                .find(|(source, session)| {
+                    source.source.kind == Provider::Copilot
+                        && session.state != SessionState::Unavailable
+                });
+            let active_session = copilot.and_then(|(source, session)| {
+                (safe_session_component(&session.session_id)
+                    && safe_windows_path(&source.source.path.to_string_lossy()))
+                .then(|| source.source.path.join(&session.session_id))
+            });
+            let session_root = snapshot
+                .sources
+                .iter()
+                .find(|source| source.source.kind == Provider::Copilot)
+                .filter(|source| safe_windows_path(&source.source.path.to_string_lossy()))
+                .map(|source| source.source.path.clone());
+            return ActionContext {
+                session_root,
+                active_session,
+                active_directory,
+                settings_path: self.settings_path.clone(),
+            };
+        }
         ActionContext {
             session_root: self.session_root.clone(),
             active_session: self.active_session.clone(),
@@ -208,6 +297,9 @@ impl App {
     }
 
     pub fn render_view(&self) -> TrayView {
+        if let Some(snapshot) = &self.aggregate {
+            return render_attention_view(snapshot, self.last_action_error, self.submission_failed);
+        }
         let variant = IconVariant::for_state(self.snapshot.state);
 
         TrayView {
@@ -280,13 +372,375 @@ pub fn format_duration(duration: Duration) -> String {
 /// Win32 truncates tooltips silently at 128 wide characters; truncating here
 /// keeps the state line intact and marks the cut explicitly.
 fn truncate_tooltip(tooltip: &str) -> String {
-    if tooltip.chars().count() <= MAX_TOOLTIP_CHARS {
-        return tooltip.to_owned();
+    bounded_text(tooltip, MAX_TOOLTIP_CHARS)
+}
+
+/// The actual UI dispatch seam: owns the accepted fixed workers/controller for
+/// the entire process lifetime, independently of Explorer's icon registration.
+/// Cadence/uptime must NEVER enter this API; every clock sample is UNIX epoch ms.
+pub struct AttentionRuntime {
+    workers: AttentionWorkers,
+    controller: AttentionController,
+    submission_failed: bool,
+}
+
+impl AttentionRuntime {
+    pub fn new(workers: AttentionWorkers) -> Self {
+        Self {
+            workers,
+            controller: AttentionController::default(),
+            submission_failed: false,
+        }
     }
 
-    let mut truncated: String = tooltip.chars().take(MAX_TOOLTIP_CHARS - 1).collect();
-    truncated.push('…');
-    truncated
+    pub fn snapshot(&self) -> &AttentionSnapshot {
+        self.controller.snapshot()
+    }
+
+    pub fn submission_failed(&self) -> bool {
+        self.submission_failed
+    }
+
+    /// Nonblocking request/drain only. `submit` is the production adapter call,
+    /// not a declaration of OS delivery. Sample AGAIN after it actually returns:
+    /// retries must be spaced from completion, even if the adapter took time.
+    pub fn cycle(
+        &mut self,
+        request_poll: bool,
+        refresh: bool,
+        mut epoch_ms: impl FnMut() -> u64,
+        mut submit: impl FnMut(&Balloon) -> bool,
+    ) {
+        let now = epoch_ms();
+        if refresh {
+            self.controller.refresh();
+        }
+        if request_poll {
+            self.workers.request_poll(now);
+        }
+        let snapshot = self.workers.drain_at(now);
+        if let Some(request) = self.controller.tick(snapshot, now) {
+            let balloon = render_notification(self.controller.snapshot(), &request);
+            let succeeded = submit(&balloon);
+            self.controller.submitted(request.id, succeeded, epoch_ms());
+            self.submission_failed = !succeeded;
+        }
+        if !self
+            .snapshot()
+            .sources
+            .iter()
+            .any(|source| source.sessions.iter().any(needs_attention))
+        {
+            self.submission_failed = false;
+        }
+    }
+
+    pub fn stop(&mut self) {
+        self.workers.stop();
+    }
+}
+
+/// Shared by the host-tested constructor and NIF_INFO adapter (including NUL).
+pub const BALLOON_TITLE_UNITS: usize = 64;
+pub const BALLOON_BODY_UNITS: usize = 256;
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Balloon {
+    pub title: String,
+    pub body: String,
+}
+
+/// Clean, bounded UTF-16 text. Truncate whole Unicode scalars, never half a
+/// surrogate pair. Strip layout/control injection; only our own layout is used.
+pub fn bounded_text(value: &str, max_units: usize) -> String {
+    let clean: String = value.chars().map(|ch| {
+        if ch.is_control() || matches!(ch, '\u{2028}' | '\u{2029}' | '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}') { ' ' } else { ch }
+    }).collect();
+    if clean.encode_utf16().count() <= max_units {
+        return clean;
+    }
+    let mut result = String::new();
+    let mut units = 0;
+    for ch in clean.chars() {
+        if units + ch.len_utf16() + 1 > max_units {
+            break;
+        }
+        result.push(ch);
+        units += ch.len_utf16();
+    }
+    if max_units > 0 {
+        result.push('…');
+    }
+    result
+}
+
+/// Fixed Win32 arrays always get a terminator, and cannot split surrogates.
+pub fn write_wide_buffer(buffer: &mut [u16], value: &str) {
+    buffer.fill(0);
+    let text = bounded_text(value, buffer.len().saturating_sub(1));
+    for (out, unit) in buffer.iter_mut().zip(text.encode_utf16()) {
+        *out = unit;
+    }
+}
+
+/// Menu labels are literal data, never accelerator/column syntax.
+pub fn menu_text(value: &str) -> String {
+    bounded_text(value, 200).replace('&', "&&")
+}
+
+pub fn needs_attention(session: &SessionSnapshot) -> bool {
+    matches!(
+        session.state,
+        SessionState::InputRequired | SessionState::Error
+    )
+}
+
+pub fn session_identity(source: &SourceSnapshot, session: &SessionSnapshot) -> SessionIdentity {
+    SessionIdentity {
+        source_id: source.source.id.clone(),
+        session_id: session.session_id.clone(),
+        instance_id: session.instance_id.clone(),
+    }
+}
+
+/// Attention-first, deterministic ordering, independent of hash/directory order.
+pub fn session_rows(snapshot: &AttentionSnapshot) -> Vec<(&SourceSnapshot, &SessionSnapshot)> {
+    let mut rows: Vec<_> = snapshot
+        .sources
+        .iter()
+        .flat_map(|source| source.sessions.iter().map(move |session| (source, session)))
+        .collect();
+    rows.sort_by(|(sa, a), (sb, b)| {
+        (
+            !needs_attention(a),
+            &sa.source.id,
+            &a.session_id,
+            &a.instance_id,
+        )
+            .cmp(&(
+                !needs_attention(b),
+                &sb.source.id,
+                &b.session_id,
+                &b.instance_id,
+            ))
+    });
+    rows
+}
+
+pub fn provider_text(provider: Provider) -> &'static str {
+    match provider {
+        Provider::Pi => "pi",
+        Provider::Copilot => "Copilot",
+    }
+}
+
+pub fn session_state_text(session: &SessionSnapshot) -> &'static str {
+    match session.attention.as_ref().map(|episode| episode.reason) {
+        Some(EpisodeReason::UiTrackingUnavailable) if session.state == SessionState::Error => {
+            "UI tracking fault (reload pi)"
+        }
+        _ => match session.state {
+            SessionState::Idle => "Idle",
+            SessionState::Working => "Working",
+            SessionState::InputRequired => "Input required",
+            SessionState::Error => "Session error",
+            SessionState::Unavailable => "Unavailable",
+        },
+    }
+}
+
+/// Put identifying fields before expandable metadata so even long directories
+/// cannot crowd out source, manual label and distinct session/instance IDs.
+pub fn session_text(source: &SourceSnapshot, session: &SessionSnapshot) -> String {
+    format!(
+        "{} | {} | {} | {}/{} | {}",
+        provider_text(source.source.kind),
+        bounded_text(&source.source.label, 24),
+        bounded_text(session.label.as_deref().unwrap_or("unlabeled"), 64),
+        bounded_text(&session.session_id, 16),
+        bounded_text(&session.instance_id, 12),
+        session_state_text(session)
+    )
+}
+
+pub fn source_text(source: &SourceSnapshot) -> String {
+    format!(
+        "{} | {} | {} sessions | input: {} | errors: {} | {} diagnostics",
+        bounded_text(&source.source.label, 40),
+        provider_text(source.source.kind),
+        source.sessions.len(),
+        if source.capabilities.input_detection {
+            "explicit dialogs"
+        } else {
+            "unavailable"
+        },
+        if source.capabilities.session_errors {
+            "supported"
+        } else {
+            "unavailable"
+        },
+        source.diagnostics.len()
+    )
+}
+
+pub fn diagnostic_text(diagnostic: Diagnostic) -> &'static str {
+    match diagnostic {
+        Diagnostic::SourceUnavailable => "Source unavailable: check configured root",
+        Diagnostic::SessionUnavailable => "Session unavailable: check file access",
+        Diagnostic::SessionOverflow => "Session/scan capacity reached",
+        Diagnostic::DeliveryHistoryOverflow => "Delivery history capacity reached",
+        Diagnostic::EpisodeIdentityExhausted => "Episode identity exhausted: restart tray",
+        Diagnostic::InvalidPiStatus => "Invalid pi status",
+        Diagnostic::OversizedPiStatus => "Oversized pi status",
+        Diagnostic::StalePiStatus => "Stale pi heartbeat",
+        Diagnostic::FuturePiStatus => "Future pi clock: check clocks",
+        Diagnostic::RegressedPiStatus => "Regressed pi clock: check clocks",
+        Diagnostic::UnsafeEntry => "Unsafe source entry ignored",
+        Diagnostic::MalformedEvent => "Malformed Copilot event",
+        Diagnostic::OversizedEvent => "Oversized Copilot event",
+        Diagnostic::InvalidWorkspace => "Invalid workspace metadata",
+    }
+}
+
+pub fn render_attention_view(
+    snapshot: &AttentionSnapshot,
+    error: Option<ActionError>,
+    submission_failed: bool,
+) -> TrayView {
+    let rows = session_rows(snapshot);
+    let attention = rows.iter().filter(|(_, s)| needs_attention(s)).count();
+    let working = rows
+        .iter()
+        .filter(|(_, s)| s.state == SessionState::Working)
+        .count();
+    let idle = rows
+        .iter()
+        .filter(|(_, s)| s.state == SessionState::Idle)
+        .count();
+    let unavailable: usize = snapshot
+        .sources
+        .iter()
+        .map(|source| {
+            source.unavailable_pi_statuses.max(
+                source
+                    .sessions
+                    .iter()
+                    .filter(|s| s.state == SessionState::Unavailable)
+                    .count(),
+            )
+        })
+        .sum();
+    let diagnostics: usize = snapshot.sources.iter().map(|s| s.diagnostics.len()).sum();
+    let variant = if attention > 0 || unavailable > 0 || diagnostics > 0 || submission_failed {
+        IconVariant::AttentionNeeded
+    } else if working > 0 {
+        IconVariant::Working
+    } else {
+        IconVariant::Idle
+    };
+    // Action failures take precedence over details so their safe explanation is
+    // never silently truncated behind a long label/path. Counts remain in menu.
+    let tooltip = if let Some(error) = error {
+        format!("{} — {error}", crate::APPLICATION_NAME)
+    } else {
+        let summary = format!(
+            "{} — {} | A{attention} W{working} I{idle} U{unavailable} D{diagnostics}",
+            crate::APPLICATION_NAME,
+            if submission_failed {
+                "Submission failed"
+            } else {
+                variant.label()
+            }
+        );
+        if let Some((source, session)) = rows.first().filter(|(_, s)| needs_attention(s)) {
+            format!(
+                "{summary} | {}/{}/{}/{}/{}",
+                provider_text(source.source.kind),
+                bounded_text(&source.source.label, 12),
+                bounded_text(session.label.as_deref().unwrap_or("unlabeled"), 16),
+                bounded_text(&session.session_id, 8),
+                bounded_text(&session.instance_id, 8)
+            )
+        } else {
+            summary
+        }
+    };
+    TrayView {
+        variant,
+        tooltip: bounded_text(&tooltip, MAX_TOOLTIP_CHARS),
+    }
+}
+
+pub fn render_notification(snapshot: &AttentionSnapshot, request: &NotificationRequest) -> Balloon {
+    let first = request
+        .episodes
+        .first()
+        .and_then(|item| {
+            snapshot
+                .sources
+                .iter()
+                .find(|source| source.source.id == item.session.source_id)
+                .and_then(|source| {
+                    source
+                        .sessions
+                        .iter()
+                        .find(|session| session_identity(source, session) == item.session)
+                        .map(|session| session_text(source, session))
+                })
+        })
+        .unwrap_or_else(|| "Attention retained in tray session list".into());
+    Balloon {
+        title: bounded_text(
+            &format!("TrayGoblin — {} need attention", request.episodes.len()),
+            BALLOON_TITLE_UNITS - 1,
+        ),
+        body: bounded_text(
+            &format!(
+                "{first}. {} session(s); right-click tray for all.",
+                request.episodes.len()
+            ),
+            BALLOON_BODY_UNITS - 1,
+        ),
+    }
+}
+
+/// Do not pass POSIX paths, URI schemes, quotes or control characters to a
+/// Windows launcher. WSL directories deliberately fail safely (no implicit map).
+pub fn safe_windows_path(path: &str) -> bool {
+    if path
+        .chars()
+        .any(|ch| ch.is_control() || matches!(ch, '"' | '<' | '>' | '|' | '?' | '*'))
+    {
+        return false;
+    }
+    let bytes = path.as_bytes();
+    if bytes.len() >= 3
+        && bytes[0].is_ascii_alphabetic()
+        && bytes[1] == b':'
+        && matches!(bytes[2], b'/' | b'\\')
+    {
+        return !path[2..].contains(':');
+    }
+    if let Some(unc) = path.strip_prefix("\\\\") {
+        let mut parts = unc.split('\\');
+        return parts
+            .next()
+            .is_some_and(|s| !s.is_empty() && s != "." && s != "..")
+            && parts
+                .next()
+                .is_some_and(|s| !s.is_empty() && s != "." && s != "..")
+            && !unc.contains(':');
+    }
+    false
+}
+
+fn safe_session_component(value: &str) -> bool {
+    !value.is_empty()
+        && value != "."
+        && value != ".."
+        && !value.chars().any(|ch| {
+            ch.is_control() || matches!(ch, '/' | '\\' | ':' | '"' | '<' | '>' | '|' | '?' | '*')
+        })
 }
 
 #[cfg(test)]

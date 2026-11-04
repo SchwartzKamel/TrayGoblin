@@ -8,6 +8,7 @@ import {
   HEARTBEAT_MS,
   MAX_STATUS_BYTES,
   MAX_PENDING_WRITES,
+  MAX_LABEL_BYTES,
   statusDirectory,
 } from "../integrations/pi/tray-goblin.js";
 
@@ -28,11 +29,14 @@ async function fixture(t, { expectedCloseFailure, ...options } = {}, metadata = 
   let clock = 10000;
   let tick;
   let cancelled = 0;
-  const publisher = createStatusPublisher({
+  // Preserve poisoned non-allowlisted getters at the REAL publisher boundary;
+  // copying just the safe keys would make privacy assertions vacuous.
+  const publisher = createStatusPublisher(Object.assign(Object.create(metadata), {
     sessionId: metadata.sessionId ?? "synthetic-session",
     model: metadata.model ?? "synthetic-model",
     directory: metadata.directory ?? "/synthetic/workspace",
-  }, {
+    label: metadata.label,
+  }), {
     directory: join(root, "status"),
     now: () => clock,
     report: (code) => reports.push(code),
@@ -102,6 +106,42 @@ test("fixed bounded schema contains only approved metadata", async (t) => {
   assert.equal(status.runStartedAt, null);
   assert.equal(status.lastRunDurationMs, null);
   assert.equal((await fs.readdir(join(f.root, "status"))).length, 1);
+});
+
+// Manual metadata alone adds one optional scalar; old v1 stays byte-key compatible.
+// Unicode/control bounds and poisoned naming/history getters guard against auto-naming.
+test("optional manual label is bounded, scalar-only and never inferred", async (t) => {
+  assert.equal(MAX_LABEL_BYTES, 64);
+  for (const [label, expected] of [
+    [undefined, undefined], ["", undefined], [" \t\n", undefined],
+    ["  review & build\n\u001b  ", "review & build"],
+    ["😀".repeat(17), "😀".repeat(16)],
+    ["a".repeat(65), "a".repeat(64)],
+    ["x\ud800y", "xy"],
+  ]) {
+    const metadata = { label,
+      get sessionName() { throw new Error("private naming access"); },
+      get history() { throw new Error("private history access"); },
+      get messages() { throw new Error("private message access"); },
+    };
+    const f = await fixture(t, {}, metadata);
+    await f.publisher.start();
+    const value = await f.read();
+    assert.equal(value.label, expected);
+    assert.deepEqual(Object.keys(value).sort(), expected === undefined ? keys : [...keys, "label"].sort());
+    if (expected !== undefined) {
+      assert.ok(Buffer.byteLength(value.label) <= MAX_LABEL_BYTES);
+      assert.doesNotMatch(value.label, /[\u0000-\u001f\u007f-\u009f\ud800-\udfff]/u);
+    }
+    await f.publisher.promptStart();
+    await f.publisher.promptEnd();
+    assert.equal((await f.read()).label, expected);
+  }
+  for (const label of [null, 42, { toString() { throw new Error("coercion forbidden"); } }]) {
+    assert.throws(() => createStatusPublisher({
+      sessionId: "synthetic", model: "synthetic", directory: "/synthetic", label,
+    }), { message: "TrayGoblin: invalid metadata" });
+  }
 });
 
 // Pi coalesces nested dialogs; duplicated interval starts are ambiguous and must latch one fault.

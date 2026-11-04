@@ -5,11 +5,12 @@ Root AGENTS.md and specs/CONSTITUTION.md govern; never edit existing AGENTS.md.
 This follow-up governs `.wgm/specs/session-attention.md`; root plan is MVP history.
 
 ## Current state — 2026-11-04 UTC
-**M1/M2/M3 accepted; M4/M5 pending; M6 field-blocked.**
-Accepted commits: M1 `0d79111`, M2 `058ef74`; M3 acceptance is recorded below and
-committed with the correction. WIP `79e9220` preserves prior dissent, not its later
+**M1/M2/M3/M4 accepted; M5 pending; M6 field-blocked.**
+Accepted commits: M1 `0d79111`, M2 `058ef74`, M3 `f4ef6de`; M4 acceptance is
+recorded below and committed with the implementation. WIP `79e9220` preserves prior dissent, not its later
 resolution. Historical recovery evidence remains in that commit and external run
-directory; this compact plan is live state. Native tray wiring is still M4.
+directory; this compact plan is live state. Native tray wiring is accepted at
+implementation/compilation tier, not proven on a Windows runtime.
 
 ## Approved goal and boundaries
 One Windows tray alerts the operator which pi/Copilot session needs attention
@@ -86,7 +87,10 @@ Pi extension and all-dialog/visible-tracking-fault policies have user approval.
 - **files/areas:** `Cargo.toml` (existing windows-sys feature flags only), `src/{tray,app,actions,icon,attention,attention_worker,monitor}.rs`, `tests/{attention_controller,attention_monitor}.rs`, `integrations/pi/{tray-goblin.js,README.md}`, `tests/pi-{status,host}.test.mjs`, `scripts/test-pi-host.mjs`, `docs/operator/{status-reference,first-run}.md`.
 - **validation:** `node --test tests/pi-status.test.mjs tests/pi-host.test.mjs && cargo test --workspace && cargo build --release --target x86_64-pc-windows-gnu --bin tray-goblin`
 - **acceptance:** R8 implementation tier. UI drains workers without filesystem I/O; bounded content-free NIF_INFO, attention-first persistent list/counts/tooltip; explicit capabilities/diagnostics and success-only submission. Explorer re-add doesn't reset acknowledgements; preserve actions. Optional bounded TRAY_GOBLIN_LABEL through publisher/parser/display gives human per-terminal identity, no prompt-derived naming. Test unlabeled compatibility/labels and document Windows/WSL launch examples. No M4 while M3 unaccepted; compilation/policy is NOT target delivery proof.
-- **status:** pending
+- **status:** done
+- **acceptance record (2026-11-04 UTC):** Exact isolated-HOME gate exit0:36 Node (26 core/10 actual offline pi1.4 host),141 Rust (68 library+38 controller+19 aggregate+16 legacy),0 skipped/ignored; Windows release cross-build and PE32+ x86-64 GUI/import checks PASS. Immutable candidate `5894cd119b80fc47bace1f36002574cc38248828`: fresh ruggedRUGGED, non-author specPASS+qualityPASS. Parent verified actual wiring, labels, runner counts and candidate/worktree source equality; reviewers verified22/22 source and7/7 artifact hashes. Fresh CopilotCLI review contexts/lenses (model family unqueried), stronger pi/gpt-6.1-sol xhigh author; no cross-family/tooling claim.
+- **implementation:** `AttentionRuntime::cycle` owns fixed workers/controller across Explorer; UI only requests/drains/stops, never source I/O/join. Epoch clocks remain separate from uptime, including actual adapter-completion timestamp. Native NIF_INFO, UTF16-safe bounded text, attention-first persistent menus/counts/capabilities/diagnostics; optional64-byte explicit manual labels through actual pi host→parser→display. Unmapped POSIX actions fail safely; Copilot logs never select pi; native singleton retained.
+- **evidence/reservations:** External `M4.{validation,rugged,spec,quality}.log`, `M4.author/REPORT.md` and `final-provenance.json`; current verdict `.wgm/rugged/M4-current.md`. Four driver controls20/20 and full38 suite5/5; three separately compiled dispatch/clock/ack mutants assertion-fail, privacy mutation hits both strengthened getter controls. Early setup/new-test failures and wonder/reflect remain preserved externally. Spec reservations:none within M4 tier. Quality reservation: actual Windows/WSL delivery/suppression/recovery/resources remain unverified M6, not waived. Exact executable SHA256 `f8acac734ebf670cec55017a952664ff0dcb12a362659ea2a17c1503a56f3602`. No Windows runtime or release-readiness claim. Fresh validator follows acceptance; M5 still owes continuous two-real-host→Rust demo.
 
 ### M5 — Package, document and run offline attention demo
 - **objective:** Installable artifact and actual shipped publisher→Rust end-to-end demo with complete setup.
@@ -106,6 +110,6 @@ Pi extension and all-dialog/visible-tracking-fault policies have user approval.
 ## Artifacts and gates
 - Goal/glossary/spec/constitution consistent; R1–R3→M1,R4–R5→M2,R6–R7→M3,R8→M4,R9–R10→M5,R11–R12→M6. Validator-only tier1→2→3 scenarios in `.wgm/scenarios/`, convergence95. Intermediate scores are not completion or root MVP regressions.
 - Full baseline audit `.wgm/docs/audit/2026-11-03T2148Z_attention-baseline.md` completed; checkpoint `.wgm/docs/audit/2026-11-04T0114Z_attention-wip-checkpoint.md` is RED, with coupled corrections/deferred Agent actions recorded in its index and `.wgm/deferred-work.md`. M5 owes final audit and remaining release-doc corrections; never waive RED as structural pass.
-- Current M1/M2/M3 implementation verdicts are RUGGED with both correctness passes; prior e193 FRAGILE/static-proof history is superseded by compiled regressions and accepted e1221e2. M3 regenerated plan had RUGGED/readiness98 before stronger author work. No implementation gate was waived.
-- Latest accepted gates: M1 Node33, M2 Rust93, M3 Rust136/targeted52; last docs381. Progress3 accepted, not complete. Tier1 currently93.37; M5 owns continuous-demo evidence, tiers2/3 stay gated until95.
-- All previous writers/reviewers and current M3 judge exited. Next authorize one fresh stronger M4 writer after this accepted commit, using external M4.strong-author.prompt. Include Cargo.toml in M4 stage allowlist before writer if extra existing Win32 features are needed. Do not edit an active helper. Keep M6 blocked, no actual Windows/release claim.
+- Current M1/M2/M3/M4 implementation verdicts are RUGGED with both correctness passes; prior e193 FRAGILE/static-proof history is superseded by compiled regressions and accepted e1221e2. M3 regenerated plan had RUGGED/readiness98 before stronger author work. No implementation gate was waived.
+- Latest accepted gates: M1 Node33, M2 Rust93, M3 Rust136/targeted52, M4 Node36/Rust141/Windows cross-build; last docs381. Progress4 accepted, not complete. Last tier1=93.37; M4 validator next. M5 owns continuous-demo evidence, tiers2/3 stay gated until95.
+- M4 author/check/review children exited; parent accepts only the pinned runtime. Next run fresh M4 validator, record scores, then authorize one fresh M5 author with explicit helper areas staged. Do not edit an active helper. M6 stays blocked; no actual Windows/release claim.

@@ -37,6 +37,7 @@ const evidence = {
   finalEpisode: 0,
   ioFailures: [],
   pendingShutdownObserved: false,
+  manualLabel: null,
 };
 const forbidden = () => {
   evidence.sensitiveReads++;
@@ -208,6 +209,17 @@ async function status() {
   assert.equal(value.sessionId, session.getSessionId());
   assert.equal(value.directory, process.cwd());
   assert.equal(value.model, modelId);
+  // The actual loaded extension may publish exactly one new optional scalar.
+  const allowed = ["version", "provider", "sessionId", "instanceId", "model", "directory",
+    "state", "attentionReason", "episode", "updatedAt", "runStartedAt", "lastRunDurationMs"];
+  if (Object.hasOwn(value, "label")) {
+    assert.equal(typeof value.label, "string");
+    assert.ok(Buffer.byteLength(value.label) <= 64);
+    assert.doesNotMatch(value.label, /[\u0000-\u001f\u007f-\u009f\ud800-\udfff]/u);
+    allowed.push("label");
+  }
+  assert.deepEqual(Object.keys(value).sort(), allowed.sort());
+  evidence.manualLabel = value.label ?? null;
   return value;
 }
 async function waitFor(predicate) {

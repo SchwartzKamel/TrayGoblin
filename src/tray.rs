@@ -16,26 +16,32 @@ use std::{
 };
 
 use windows_sys::Win32::{
-    Foundation::{HWND, LPARAM, LRESULT, POINT, WPARAM},
+    Foundation::{
+        CloseHandle, ERROR_ALREADY_EXISTS, GetLastError, HANDLE, HWND, LPARAM, LRESULT, POINT,
+        WPARAM,
+    },
     Graphics::Gdi::{
         BI_RGB, BITMAPINFO, BITMAPINFOHEADER, CreateBitmap, CreateDIBSection, DIB_RGB_COLORS,
         DeleteObject,
     },
-    System::{LibraryLoader::GetModuleHandleW, SystemInformation::GetTickCount64},
+    System::{
+        LibraryLoader::GetModuleHandleW, SystemInformation::GetTickCount64, Threading::CreateMutexW,
+    },
     UI::{
         Shell::{
-            NIF_ICON, NIF_MESSAGE, NIF_TIP, NIM_ADD, NIM_DELETE, NIM_MODIFY, NOTIFYICONDATAW,
-            Shell_NotifyIconW, ShellExecuteW,
+            NIF_ICON, NIF_INFO, NIF_MESSAGE, NIF_TIP, NIIF_WARNING, NIM_ADD, NIM_DELETE,
+            NIM_MODIFY, NOTIFYICONDATAW, Shell_NotifyIconW, ShellExecuteW,
         },
         WindowsAndMessaging::{
             AppendMenuW, CW_USEDEFAULT, CreateIconIndirect, CreatePopupMenu, CreateWindowExW,
             DefWindowProcW, DestroyIcon, DestroyMenu, DestroyWindow, DispatchMessageW,
             GetCursorPos, GetMessageW, HICON, ICONINFO, IDC_ARROW, KillTimer, LoadCursorW,
-            MB_ICONERROR, MB_OK, MF_BYCOMMAND, MF_SEPARATOR, MF_STRING, MSG, MessageBoxW,
-            PostMessageW, PostQuitMessage, RegisterClassExW, RegisterWindowMessageW, SW_SHOWNORMAL,
-            SetForegroundWindow, SetTimer, TPM_BOTTOMALIGN, TPM_NONOTIFY, TPM_RETURNCMD,
-            TPM_RIGHTALIGN, TPM_RIGHTBUTTON, TrackPopupMenu, TranslateMessage, WM_APP, WM_DESTROY,
-            WM_LBUTTONDBLCLK, WM_NULL, WM_RBUTTONUP, WM_TIMER, WNDCLASSEXW, WS_OVERLAPPED,
+            MB_ICONERROR, MB_OK, MF_BYCOMMAND, MF_GRAYED, MF_POPUP, MF_SEPARATOR, MF_STRING, MSG,
+            MessageBoxW, PostMessageW, PostQuitMessage, RegisterClassExW, RegisterWindowMessageW,
+            SW_SHOWNORMAL, SetForegroundWindow, SetTimer, TPM_BOTTOMALIGN, TPM_NONOTIFY,
+            TPM_RETURNCMD, TPM_RIGHTALIGN, TPM_RIGHTBUTTON, TrackPopupMenu, TranslateMessage,
+            WM_APP, WM_DESTROY, WM_LBUTTONDBLCLK, WM_NULL, WM_RBUTTONUP, WM_TIMER, WNDCLASSEXW,
+            WS_OVERLAPPED,
         },
     },
 };
@@ -43,10 +49,15 @@ use windows_sys::Win32::{
 use crate::{
     APPLICATION_NAME,
     actions::{LaunchTarget, MENU_ITEMS, TrayAction, default_settings_path, ensure_settings_file},
-    app::{App, AppEffect, AppMessage, MAX_TOOLTIP_CHARS, TrayView, timer_interval_ms},
-    config::{MonitorConfig, default_session_root},
+    app::{
+        App, AppEffect, AppMessage, AttentionRuntime, Balloon, TrayView, diagnostic_text,
+        menu_text, safe_windows_path, session_identity, session_rows, session_text, source_text,
+        timer_interval_ms, write_wide_buffer,
+    },
+    attention::SessionIdentity,
+    attention_worker::AttentionWorkers,
+    config::{MonitorConfig, Provider},
     icon::IconVariant,
-    monitor::SessionMonitor,
 };
 
 const WINDOW_CLASS_NAME: &str = "TrayGoblinShellWindow";
@@ -65,6 +76,8 @@ pub enum TrayError {
     ConfigurationUnreadable,
     ConfigurationInvalid,
     TimerUnavailable,
+    WorkerUnavailable,
+    SingletonUnavailable,
 }
 
 impl fmt::Display for TrayError {
@@ -84,9 +97,13 @@ impl fmt::Display for TrayError {
             }
             Self::ConfigurationInvalid => write!(
                 f,
-                "the settings file is invalid; use 500-10000 for pollIntervalMs"
+                "the settings file is invalid; check sources and pollIntervalMs (500-10000)"
             ),
             Self::TimerUnavailable => write!(f, "the polling timer could not be started"),
+            Self::WorkerUnavailable => write!(f, "attention source workers could not be started"),
+            Self::SingletonUnavailable => {
+                write!(f, "the interactive-session tray guard could not be created")
+            }
         }
     }
 }
@@ -120,7 +137,7 @@ impl Icons {
 struct Shell {
     window: HWND,
     app: App,
-    monitor: SessionMonitor,
+    attention: AttentionRuntime,
     icons: Icons,
     taskbar_created_message: u32,
     icon_registered: bool,
@@ -132,13 +149,22 @@ thread_local! {
 
 /// Runs the tray until the user selects Quit.
 pub fn run() -> Result<(), TrayError> {
+    // A Local named object is scoped to this interactive Windows session, not
+    // a service/global collector. Keep the handle alive until the loop exits.
+    let Some(_singleton) = Singleton::acquire()? else {
+        return Ok(());
+    };
     let settings_path = default_settings_path();
     let config = load_config(settings_path.as_deref())?;
-    let session_root = config
-        .session_root()
-        .cloned()
-        .or_else(default_session_root)
-        .ok_or(TrayError::NoSessionRoot)?;
+    let sources = config
+        .resolved_sources()
+        .map_err(|_| TrayError::ConfigurationInvalid)?;
+    let session_root = sources
+        .iter()
+        .find(|source| source.kind == Provider::Copilot)
+        .map(|source| source.path.clone());
+    let workers = AttentionWorkers::new(sources, unix_epoch_ms())
+        .map_err(|_| TrayError::WorkerUnavailable)?;
     let timer_interval = timer_interval_ms(config.poll_interval_ms());
 
     let window = unsafe { create_message_window()? };
@@ -149,8 +175,8 @@ pub fn run() -> Result<(), TrayError> {
             return Err(error);
         }
     };
-    let app = App::new(&config, Some(session_root.clone()), settings_path);
-    let monitor = SessionMonitor::new(session_root);
+    let app = App::new(&config, session_root, settings_path);
+    let attention = AttentionRuntime::new(workers);
 
     let taskbar_created_message =
         unsafe { RegisterWindowMessageW(wide("TaskbarCreated").as_ptr()) };
@@ -158,7 +184,7 @@ pub fn run() -> Result<(), TrayError> {
     let mut shell = Shell {
         window,
         app,
-        monitor,
+        attention,
         icons,
         taskbar_created_message,
         icon_registered: false,
@@ -280,22 +306,25 @@ impl Shell {
     /// Effects are queued rather than recursed so a poll that triggers a tray
     /// update cannot grow the stack.
     fn dispatch(&mut self, message: AppMessage) {
+        let refresh = matches!(
+            message,
+            AppMessage::MenuCommand {
+                action: TrayAction::RefreshNow,
+                ..
+            }
+        );
+        let drive = refresh
+            || matches!(
+                message,
+                AppMessage::Started { .. } | AppMessage::TimerTick { .. }
+            );
+        let mut poll = false;
         let mut queue = VecDeque::from([message]);
 
         while let Some(message) = queue.pop_front() {
             for effect in self.app.handle(message) {
                 match effect {
-                    AppEffect::RequestPoll => {
-                        let snapshot = self.monitor.poll();
-                        let active_session = self
-                            .monitor
-                            .active_session_path()
-                            .map(|path| path.to_path_buf());
-                        queue.push_back(AppMessage::SnapshotUpdated {
-                            snapshot,
-                            active_session,
-                        });
-                    }
+                    AppEffect::RequestPoll => poll = true,
                     AppEffect::UpdateTray(view) => self.update_icon(&view),
                     AppEffect::Launch { action, target } => {
                         if launch(&target).is_err() {
@@ -303,9 +332,33 @@ impl Shell {
                         }
                     }
                     AppEffect::Quit => {
+                        self.attention.stop();
                         self.remove_icon();
                         unsafe { PostQuitMessage(0) };
                     }
+                }
+            }
+        }
+        if drive {
+            let window = self.window;
+            let registered = self.icon_registered;
+            let mut failed = false;
+            self.attention
+                .cycle(poll, refresh, unix_epoch_ms, |balloon| {
+                    let submitted = registered && submit_balloon(window, balloon);
+                    failed = !submitted;
+                    submitted
+                });
+            // Icon recovery never replaces/rearms the worker/controller engine.
+            if failed {
+                self.icon_registered = false;
+            }
+            for effect in self.app.update_attention(
+                self.attention.snapshot().clone(),
+                self.attention.submission_failed(),
+            ) {
+                if let AppEffect::UpdateTray(view) = effect {
+                    self.update_icon(&view);
                 }
             }
         }
@@ -321,7 +374,7 @@ impl Shell {
 
         let view = view.cloned().unwrap_or_else(|| self.app.render_view());
         data.hIcon = self.icons.handle(view.variant);
-        write_tooltip(&mut data.szTip, &view.tooltip);
+        write_wide_buffer(&mut data.szTip, &view.tooltip);
         data
     }
 
@@ -333,7 +386,14 @@ impl Shell {
             NIM_ADD
         };
         let updated = unsafe { Shell_NotifyIconW(message, &data) } != 0;
-        self.icon_registered = updated;
+        // A failed balloon/update does not prove whether Explorer retained the
+        // icon. Recover either case without touching delivery history.
+        let fallback = if message == NIM_ADD {
+            NIM_MODIFY
+        } else {
+            NIM_ADD
+        };
+        self.icon_registered = updated || unsafe { Shell_NotifyIconW(fallback, &data) } != 0;
     }
 
     /// Explorer restarts drop every tray icon; re-adding on `TaskbarCreated`
@@ -359,10 +419,103 @@ impl Shell {
     /// Shows the right-click menu. `TPM_RETURNCMD` keeps the selection
     /// synchronous, so no `WM_COMMAND` can re-enter the window procedure
     /// while the shell state is checked out.
-    fn show_menu(&mut self) -> Option<TrayAction> {
+    fn show_menu(&mut self) -> Option<MenuSelection> {
         let menu = unsafe { CreatePopupMenu() };
         if menu.is_null() {
             return None;
+        }
+
+        let mut sessions = Vec::new();
+        if let Some(snapshot) = self.app.attention_snapshot() {
+            let view = self.app.render_view();
+            append_menu_text(menu, MF_GRAYED, 0, &view.tooltip);
+            append_menu_text(
+                menu,
+                MF_GRAYED,
+                0,
+                "Counts: A attention | W working | I idle | U unavailable | D diagnostics",
+            );
+            if self.attention.submission_failed() {
+                append_menu_text(
+                    menu,
+                    MF_GRAYED,
+                    0,
+                    "Submission failed; attention retained. Refresh can rearm exhausted attempts.",
+                );
+            }
+            unsafe { AppendMenuW(menu, MF_SEPARATOR, 0, ptr::null()) };
+            for (source, session) in session_rows(snapshot) {
+                let submenu = unsafe { CreatePopupMenu() };
+                if submenu.is_null() {
+                    continue;
+                }
+                let id = FIRST_SESSION_COMMAND_ID + sessions.len() as u32;
+                append_menu_text(
+                    submenu,
+                    MF_STRING,
+                    id as usize,
+                    "Use for Open in VS Code (no terminal focus)",
+                );
+                for detail in [
+                    format!("Source: {} ({})", source.source.label, source.source.id),
+                    format!("Session: {}", session.session_id),
+                    format!("Instance: {}", session.instance_id),
+                    format!("Label: {}", session.label.as_deref().unwrap_or("unlabeled")),
+                    format!("Model: {}", session.model.as_deref().unwrap_or("unknown")),
+                    format!(
+                        "Directory: {}",
+                        session.directory.as_deref().unwrap_or("unknown")
+                    ),
+                    format!(
+                        "Run start (UNIX ms): {} | Last run (ms): {}",
+                        session
+                            .run_started_at_ms
+                            .map_or("unknown".into(), |n| n.to_string()),
+                        session
+                            .last_run_duration_ms
+                            .map_or("unknown".into(), |n| n.to_string())
+                    ),
+                ] {
+                    append_menu_text(submenu, MF_GRAYED, 0, &detail);
+                }
+                append_menu_text(
+                    menu,
+                    MF_POPUP,
+                    submenu as usize,
+                    &session_text(source, session),
+                );
+                sessions.push(session_identity(source, session));
+            }
+            if sessions.is_empty() {
+                append_menu_text(menu, MF_GRAYED, 0, "No live sessions");
+            }
+            unsafe { AppendMenuW(menu, MF_SEPARATOR, 0, ptr::null()) };
+            for source in &snapshot.sources {
+                let submenu = unsafe { CreatePopupMenu() };
+                if submenu.is_null() {
+                    continue;
+                }
+                append_menu_text(submenu, MF_GRAYED, 0, &source_text(source));
+                append_menu_text(
+                    submenu,
+                    MF_GRAYED,
+                    0,
+                    &format!("Unavailable pi files: {}", source.unavailable_pi_statuses),
+                );
+                if let Some(distro) = &source.source.wsl_distro {
+                    append_menu_text(
+                        submenu,
+                        MF_GRAYED,
+                        0,
+                        &format!("WSL: {distro}; UNC reads may wake distro"),
+                    );
+                }
+                for diagnostic in &source.diagnostics {
+                    append_menu_text(submenu, MF_GRAYED, 0, diagnostic_text(*diagnostic));
+                }
+                append_menu_text(menu, MF_POPUP, submenu as usize, &source_text(source));
+            }
+            unsafe { AppendMenuW(menu, MF_SEPARATOR, 0, ptr::null()) };
         }
 
         for action in MENU_ITEMS {
@@ -403,12 +556,21 @@ impl Shell {
             DestroyMenu(menu);
         };
 
-        TrayAction::from_command_id(selection as u32)
+        let selection = selection as u32;
+        TrayAction::from_command_id(selection)
+            .map(MenuSelection::Action)
+            .or_else(|| {
+                selection
+                    .checked_sub(FIRST_SESSION_COMMAND_ID)
+                    .and_then(|i| sessions.get(i as usize).cloned())
+                    .map(MenuSelection::Session)
+            })
     }
 }
 
 impl Drop for Shell {
     fn drop(&mut self) {
+        self.attention.stop();
         self.remove_icon();
         for icon in [self.icons.idle, self.icons.working, self.icons.attention] {
             unsafe { DestroyIcon(icon) };
@@ -469,9 +631,15 @@ fn handle_tray_callback(mouse_message: u32) {
     match mouse_message {
         WM_RBUTTONUP => {
             let selection = with_shell(|shell| shell.show_menu()).flatten();
-            if let Some(action) = selection {
-                let now_ms = unsafe { GetTickCount64() };
-                with_shell(|shell| shell.dispatch(AppMessage::MenuCommand { action, now_ms }));
+            match selection {
+                Some(MenuSelection::Action(action)) => {
+                    let now_ms = unsafe { GetTickCount64() };
+                    with_shell(|shell| shell.dispatch(AppMessage::MenuCommand { action, now_ms }));
+                }
+                Some(MenuSelection::Session(identity)) => {
+                    with_shell(|shell| shell.app.select_session(identity));
+                }
+                None => {}
             }
         }
         // Double-clicking is the fastest path to the primary action.
@@ -491,6 +659,14 @@ fn handle_tray_callback(mouse_message: u32) {
 /// Opens a local target. Only the target kind reaches the operating system;
 /// failures are reported back as a content-free action error.
 fn launch(target: &LaunchTarget) -> Result<(), ()> {
+    // Never let POSIX/URI/quoted paths acquire accidental Windows meanings.
+    let path = match target {
+        LaunchTarget::Editor { directory } | LaunchTarget::Folder { directory } => directory,
+        LaunchTarget::File { path } => path,
+    };
+    if !safe_windows_path(&path.to_string_lossy()) {
+        return Err(());
+    }
     match target {
         LaunchTarget::Editor { directory } => {
             let quoted = format!("\"{}\"", directory.display());
@@ -632,21 +808,63 @@ fn create_icon(variant: IconVariant) -> Result<HICON, TrayError> {
     Ok(icon)
 }
 
-/// Copies a tooltip into a fixed Win32 buffer, always NUL-terminated.
-fn write_tooltip(buffer: &mut [u16; 128], tooltip: &str) {
-    let mut encoded: Vec<u16> = Vec::with_capacity(MAX_TOOLTIP_CHARS);
-    let mut units = [0u16; 2];
-    for character in tooltip.chars() {
-        let encoded_character = character.encode_utf16(&mut units);
-        // Stop on whole characters so a surrogate pair is never split.
-        if encoded.len() + encoded_character.len() > MAX_TOOLTIP_CHARS {
-            break;
-        }
-        encoded.extend_from_slice(encoded_character);
-    }
+/// Shell acceptance is submission only; Focus Assist/settings can suppress it.
+/// The exact text/buffer construction is shared with host policy tests.
+fn submit_balloon(window: HWND, balloon: &Balloon) -> bool {
+    let mut data: NOTIFYICONDATAW = unsafe { std::mem::zeroed() };
+    data.cbSize = size_of::<NOTIFYICONDATAW>() as u32;
+    data.hWnd = window;
+    data.uID = TRAY_ICON_ID;
+    data.uFlags = NIF_INFO;
+    data.dwInfoFlags = NIIF_WARNING;
+    write_wide_buffer(&mut data.szInfoTitle, &balloon.title);
+    write_wide_buffer(&mut data.szInfo, &balloon.body);
+    unsafe { Shell_NotifyIconW(NIM_MODIFY, &data) != 0 }
+}
 
-    buffer.fill(0);
-    buffer[..encoded.len()].copy_from_slice(&encoded);
+/// Separate from GetTickCount64: freshness/retry timestamps use wall time.
+fn unix_epoch_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64
+}
+
+const FIRST_SESSION_COMMAND_ID: u32 = 100;
+enum MenuSelection {
+    Action(TrayAction),
+    Session(SessionIdentity),
+}
+
+fn append_menu_text(
+    menu: windows_sys::Win32::UI::WindowsAndMessaging::HMENU,
+    flags: u32,
+    id: usize,
+    text: &str,
+) {
+    let text = wide(&menu_text(text));
+    unsafe { AppendMenuW(menu, flags, id, text.as_ptr()) };
+}
+
+struct Singleton(HANDLE);
+impl Singleton {
+    fn acquire() -> Result<Option<Self>, TrayError> {
+        let name = wide("Local\\TrayGoblin.NativeTray");
+        let handle = unsafe { CreateMutexW(ptr::null(), 0, name.as_ptr()) };
+        if handle.is_null() {
+            return Err(TrayError::SingletonUnavailable);
+        }
+        if unsafe { GetLastError() } == ERROR_ALREADY_EXISTS {
+            unsafe { CloseHandle(handle) };
+            return Ok(None);
+        }
+        Ok(Some(Self(handle)))
+    }
+}
+impl Drop for Singleton {
+    fn drop(&mut self) {
+        unsafe { CloseHandle(self.0) };
+    }
 }
 
 fn wide(value: &str) -> Vec<u16> {

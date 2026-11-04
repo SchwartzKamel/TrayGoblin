@@ -82,6 +82,55 @@ fn append(path: &Path, events: &str) {
         .unwrap();
 }
 
+// Optional manual labels must cross the real parser/monitor while unlabeled v1
+// stays compatible; private/generated names are never accepted as label aliases.
+#[test]
+fn pi_manual_label_bounds_privacy_and_v1_compatibility() {
+    let scratch = Scratch::new();
+    let config = scratch.config(&["pi"]);
+    let root = &config.sources().unwrap()[0].path;
+    for label in [
+        None,
+        Some(json!("review & 😀")),
+        Some(json!("a".repeat(64))),
+        Some(Value::Null),
+    ] {
+        let mut value = pi();
+        if let Some(label) = label {
+            value["label"] = label;
+        }
+        value["sessionName"] = json!("PRIVATE_GENERATED_NAME");
+        value["history"] = json!(["PRIVATE_HISTORY"]);
+        write_pi(root, &value);
+        let result = monitor(&config).poll_at(NOW);
+        let session = &result.sources[0].sessions[0];
+        assert_eq!(
+            session.label.as_deref(),
+            value.get("label").and_then(Value::as_str)
+        );
+        let serialized = serde_json::to_string(session).unwrap();
+        assert!(!serialized.contains("PRIVATE_"));
+        if session.label.is_none() {
+            assert!(!serialized.contains("\"label\""));
+        }
+    }
+    for label in [
+        json!("a".repeat(65)),
+        json!("😀".repeat(17)),
+        json!("bad\nlabel"),
+        json!("  "),
+        json!(42),
+        json!({"name":"private"}),
+    ] {
+        let mut value = pi();
+        value["label"] = label;
+        assert_eq!(
+            parse_pi_status(value.to_string().as_bytes(), NOW).unwrap_err(),
+            Diagnostic::InvalidPiStatus
+        );
+    }
+}
+
 // Proves replacement/default semantics and every source-config boundary without changing process HOME.
 #[test]
 fn source_configuration_preserves_defaults_aliases_and_explicit_replacement() {

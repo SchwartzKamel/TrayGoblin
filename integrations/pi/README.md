@@ -20,13 +20,39 @@ directory). Each process/session lifetime publishes a randomly named
 `<instanceId>.json`; consumers must ignore `.tmp` files. Configure a WSL consumer
 source explicitly, e.g. `\\wsl.localhost\Ubuntu\home\operator\.traygoblin\pi`.
 UNC reads may wake/keep WSL running; this publisher makes no no-wake guarantee.
-Consumer integration and release packaging are subsequent plan tasks.
+The Windows tray consumes these sources through independent workers; release
+packaging and real Windows/WSL delivery validation remain separate plan tasks.
+
+## Same-repository terminal labels
+
+Optional `TRAY_GOBLIN_LABEL` is **explicit user metadata**, not pi's automatic
+session name, history or a generated prompt summary. Set it before launching pi:
+
+```powershell
+# Native Windows PowerShell; adjust the checkout path:
+$env:TRAY_GOBLIN_LABEL = 'review'
+pi --extension C:\src\TrayGoblin\integrations\pi\tray-goblin.js
+```
+
+```sh
+# A separate terminal inside WSL, in the same repository if desired:
+TRAY_GOBLIN_LABEL=build pi --extension /home/operator/TrayGoblin/integrations/pi/tray-goblin.js
+```
+
+The tray shows provider/source, this label and distinct session/instance IDs.
+Labels are capped at 64 UTF-8 bytes after control removal/truncation, then trimmed;
+blank/unset omits the field and retains unlabeled v1 compatibility. There is no
+naming subsystem or terminal UI customization. Restart pi to change its inherited
+label. WSL source roots must still be explicitly configured in the Windows tray.
+Unmapped POSIX working directories cannot be opened through the Windows editor
+action; use that terminal instead. No terminal focus/control or implicit path mapping.
 
 ## Status protocol v1
 
 These are **all** the published keys. Do not infer identity from the directory.
 All timestamps/durations are integer milliseconds, all numbers are nonnegative
 safe JSON integers, and optional measurements use JSON `null`, not omitted keys.
+The sole optional metadata field `label` is omitted when unset/blank.
 String limits are UTF-8 bytes after control-character removal and truncation.
 
 | Key | Type / bound | Meaning |
@@ -34,6 +60,7 @@ String limits are UTF-8 bytes after control-character removal and truncation.
 | `version` | integer `1` | Protocol version |
 | `provider` | string `pi` | CLI family |
 | `sessionId` | string, 128 bytes | Only `sessionManager.getSessionId()` |
+| `label` | OPTIONAL string, 64 bytes | Only manually supplied `TRAY_GOBLIN_LABEL`; never generated naming/history |
 | `instanceId` | UUID string, 36 ASCII bytes | Fresh per publisher lifetime |
 | `model` | string, 128 bytes | Only `ctx.model.id`; empty if unknown |
 | `directory` | string, 2048 bytes | Only `ctx.cwd` |

@@ -7,6 +7,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 use crate::config::Source;
 
 pub const MAX_PI_BYTES: usize = 16 * 1024;
+pub const MAX_LABEL_BYTES: usize = 64;
 pub const MAX_SESSIONS: usize = 64;
 pub const MAX_SOURCE_MEMBERSHIP: usize = 4096;
 pub const STALE_AFTER_MS: u64 = 10_000;
@@ -42,6 +43,9 @@ pub struct AttentionEpisode {
 #[derive(Clone, Debug, Serialize, Eq, PartialEq)]
 pub struct SessionSnapshot {
     pub session_id: String,
+    /// Explicit operator metadata only; never a provider-generated session name.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
     pub instance_id: String,
     pub model: Option<String>,
     pub directory: Option<String>,
@@ -118,6 +122,8 @@ pub struct PiStatus {
     version: u64,
     provider: String,
     pub session_id: String,
+    #[serde(default)]
+    pub label: Option<String>,
     pub instance_id: String,
     pub model: String,
     pub directory: String,
@@ -172,6 +178,10 @@ pub fn parse_pi_status(bytes: &[u8], now_ms: u64) -> Result<PiStatus, Diagnostic
         || status.provider != "pi"
         || !is_uuid(&status.instance_id)
         || !bounded(&status.session_id, 128)
+        || status
+            .label
+            .as_ref()
+            .is_some_and(|label| label.trim().is_empty() || !bounded(label, MAX_LABEL_BYTES))
         || !bounded(&status.model, 128)
         || !bounded(&status.directory, 2048)
         || status.episode > MAX_SAFE_INTEGER
@@ -206,6 +216,7 @@ impl PiStatus {
         };
         SessionSnapshot {
             session_id: self.session_id,
+            label: self.label,
             instance_id: self.instance_id,
             model: (!self.model.is_empty()).then_some(self.model),
             directory: (!self.directory.is_empty()).then_some(self.directory),
@@ -465,6 +476,7 @@ mod tests {
         let sessions: Vec<_> = (first..first + MAX_SESSIONS)
             .map(|id| SessionSnapshot {
                 session_id: format!("session-{id}"),
+                label: None,
                 instance_id: format!("instance-{id}"),
                 model: None,
                 directory: None,

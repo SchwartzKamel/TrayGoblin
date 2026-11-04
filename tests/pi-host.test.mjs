@@ -40,6 +40,7 @@ test("pi 1.4.0 runtime-loads the shipped publisher with real blocking UI wrappin
   ].join("\n"));
   const evidence = JSON.parse(stdout);
   assert.equal(evidence.hostVersion, "1.4.0");
+  assert.equal(evidence.manualLabel, null);
   assert.equal(evidence.extensionsLoaded, 1);
   assert.equal(evidence.uiStarts, 7);
   assert.equal(evidence.uiEnds, 7);
@@ -60,6 +61,43 @@ test("pi 1.4.0 runtime-loads the shipped publisher with real blocking UI wrappin
   await assert.rejects(fs.stat(join(home, "agent", "settings.json")), { code: "ENOENT" });
   assert.deepEqual(await fs.readdir(join(home, "status")), []);
 });
+
+// Explicit per-terminal labels traverse the actual installed loader/runner and
+// all lifecycle/privacy/fault controls; blank labels preserve unlabeled v1.
+for (const [label, expected] of [["  review & 😀\n\u001b " + "α".repeat(40), "review & 😀 " + "α".repeat(24)], [" \t\n", null]]) {
+  test(`pi 1.4.0 publishes only bounded manual label (${expected === null ? "blank" : "named"})`, async (t) => {
+    const home = await fs.mkdtemp(join(tmpdir(), "traygoblin-pi-label-"));
+    t.after(() => fs.rm(home, { recursive: true, force: true }));
+    const workspace = join(home, "workspace");
+    await fs.mkdir(workspace);
+    const packageRoot = process.env.PI_CODING_AGENT_PACKAGE ??
+      resolve(dirname(process.execPath), "../lib/node_modules/@earendil-works/pi-coding-agent");
+    const { stdout, stderr } = await promisify(execFile)(process.execPath, [
+      resolve("scripts/test-pi-host.mjs"), packageRoot, resolve("integrations/pi/tray-goblin.js"),
+    ], {
+      cwd: workspace,
+      env: {
+        PATH: dirname(process.execPath), HOME: home, USERPROFILE: home,
+        XDG_CONFIG_HOME: join(home, "config"), XDG_CACHE_HOME: join(home, "cache"),
+        PI_CODING_AGENT_DIR: join(home, "agent"), TRAY_GOBLIN_STATUS_DIR: join(home, "status"),
+        TRAY_GOBLIN_LABEL: label,
+      }, timeout: 30000, maxBuffer: 128 * 1024,
+    });
+    assert.equal(stderr, "TrayGoblin: write-failed\nTrayGoblin: rename-failed\nTrayGoblin: delete-failed\n");
+    const evidence = JSON.parse(stdout);
+    assert.equal(evidence.hostVersion, "1.4.0");
+    assert.equal(evidence.manualLabel, expected);
+    assert.equal(evidence.sensitiveReads, 0);
+    assert.equal(evidence.networkCalls, 0);
+    assert.equal(evidence.cleanupObserved, true);
+    assert.equal(evidence.replacementObserved, true);
+    assert.equal(evidence.uiStarts, 7);
+    assert.equal(evidence.uiEnds, 7);
+    assert.deepEqual(await fs.readdir(join(home, "status")), []);
+    await assert.rejects(fs.stat(join(home, "agent", "auth.json")), { code: "ENOENT" });
+    await assert.rejects(fs.stat(join(home, "agent", "settings.json")), { code: "ENOENT" });
+  });
+}
 
 // Transient startup failure must not make real wrapped input status go stale after recovery.
 test("pi 1.4.0 heartbeat recovers after initial publication failure without restart", async (t) => {

@@ -6,6 +6,7 @@ import { join, resolve } from "node:path";
 export const HEARTBEAT_MS = 2000;
 export const MAX_STATUS_BYTES = 16 * 1024;
 export const MAX_PENDING_WRITES = 32;
+export const MAX_LABEL_BYTES = 64;
 
 class StatusError extends Error {}
 
@@ -57,6 +58,11 @@ export function createStatusPublisher(metadata, options = {}) {
     runStartedAt: null,
     lastRunDurationMs: null,
   };
+  // Only an explicitly supplied scalar label is allowed, never session name/history.
+  const label = metadata.label === undefined
+    ? ""
+    : bounded(metadata.label, MAX_LABEL_BYTES).replace(/[\ud800-\udfff]/gu, "").trim();
+  if (label) status.label = label;
   let active = false;
   let promptOpen = false;
   let trackingFaultEpisode;
@@ -311,6 +317,7 @@ export default function trayGoblin(pi) {
       sessionId: ctx.sessionManager.getSessionId(),
       model: ctx.model?.id ?? "",
       directory: ctx.cwd,
+      label: process.env.TRAY_GOBLIN_LABEL,
     });
     await publisher.start();
   });
