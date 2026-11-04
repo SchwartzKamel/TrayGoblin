@@ -4,7 +4,11 @@
 
 > **Architecture decision:** The implementation uses one native Rust process rather than the original Electron/Tauri and Node.js sketch. This is the accepted decision in [`specs/adr/0001-native-rust-tray.md`](../specs/adr/0001-native-rust-tray.md), chosen to protect the memory, CPU, privacy, and manual-release constraints. The implemented design is described in [`architecture.md`](architecture.md).
 
-This page is the product definition. For usage, read the operator guides — [Installation](operator/installation.md), [First run](operator/first-run.md), [Status reference](operator/status-reference.md), [Configuration](operator/configuration.md), [Privacy](operator/privacy.md), and [Troubleshooting](operator/troubleshooting.md) — all indexed in [`README.md`](README.md).
+This page is the **historical MVP** product definition, not the current attention
+scope. The active [attention plan](../.wgm/IMPLEMENTATION_PLAN.md) and
+[spec](../.wgm/specs/session-attention.md) govern the additive pi/Copilot work;
+M1–M4 are accepted at implementation/compilation tier, M5 is in progress and M6
+real Windows/WSL/resource evidence remains blocked. For usage, read the operator guides — [Installation](operator/installation.md), [First run](operator/first-run.md), [Status reference](operator/status-reference.md), [Configuration](operator/configuration.md), [Privacy](operator/privacy.md), and [Troubleshooting](operator/troubleshooting.md) — all indexed in [`README.md`](README.md).
 
 ## Overview
 A lightweight Windows notification-area application that displays real-time, content-free status from GitHub Copilot CLI. It provides at-a-glance Copilot activity without requiring a dashboard or terminal switch.

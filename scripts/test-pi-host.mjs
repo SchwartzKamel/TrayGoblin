@@ -11,7 +11,7 @@ import net from "node:net";
 const [packageRoot, extensionPath, mode] = process.argv.slice(2);
 assert.ok(packageRoot && extensionPath, "package and extension paths are required");
 assert.ok(mode === undefined || [
-  "startup-recovery", "startup-order", "dialog-policy", "prompt-order",
+  "attention-peer", "startup-recovery", "startup-order", "dialog-policy", "prompt-order",
   "old-debt-new-dialog-idle", "old-debt-new-dialog-working", "old-debt-new-dialog-error",
 ].includes(mode));
 assert.notEqual(process.env.HOME, undefined);
@@ -118,7 +118,11 @@ export default function earlierUIObserver(pi) {
 const loaded = await loadExtensions(extensionPaths, process.cwd());
 assert.deepEqual(loaded.errors, []);
 assert.equal(loaded.extensions.length, extensionPaths.length);
-await assert.rejects(fs.stat(process.env.TRAY_GOBLIN_STATUS_DIR), { code: "ENOENT" });
+// Standalone controls own a missing root; concurrent peers share the first
+// publisher's already-created root, but still start no resources in factories.
+if (mode !== "attention-peer") {
+  await assert.rejects(fs.stat(process.env.TRAY_GOBLIN_STATUS_DIR), { code: "ENOENT" });
+}
 evidence.extensionsLoaded = loaded.extensions.length;
 const session = SessionManager.inMemory(process.cwd());
 const manager = new Proxy(session, {
@@ -204,8 +208,12 @@ function deferred() {
 async function status() {
   const files = (await fs.readdir(process.env.TRAY_GOBLIN_STATUS_DIR))
     .filter((name) => name.endsWith(".json"));
-  assert.equal(files.length, 1);
-  const value = JSON.parse(await fs.readFile(join(process.env.TRAY_GOBLIN_STATUS_DIR, files[0]), "utf8"));
+  if (mode !== "attention-peer") assert.equal(files.length, 1);
+  const values = await Promise.all(files.map(async (name) =>
+    JSON.parse(await fs.readFile(join(process.env.TRAY_GOBLIN_STATUS_DIR, name), "utf8"))));
+  const owned = values.filter((value) => value.sessionId === session.getSessionId());
+  assert.equal(owned.length, 1);
+  const [value] = owned;
   assert.equal(value.sessionId, session.getSessionId());
   assert.equal(value.directory, process.cwd());
   assert.equal(value.model, modelId);
@@ -791,8 +799,67 @@ async function exerciseOldDebtNewDialog(underlying) {
   evidence.cleanupObserved = (await fs.readdir(process.env.TRAY_GOBLIN_STATUS_DIR)).length === 0;
 }
 
+// The continuous demo reuses this exact real-host bootstrap in TWO live child
+// processes. IPC drives lifecycle metadata only; UI events still originate in
+// the installed runner's blocking wrapper, never hand-written protocol files.
+async function exerciseAttentionPeer() {
+  assert.equal(typeof process.send, "function");
+  await runner.emit(event("session_start"));
+  process.send({ ready: await status(), pid: process.pid, hostVersion: manifest.version });
+  let waiting;
+  for await (const message of peerMessages()) {
+    try {
+      switch (message.command) {
+        case "run": await runner.emit(event("agent_start")); break;
+        case "open":
+          assert.equal(waiting, undefined);
+          dialog = deferred();
+          promptEnded = deferred();
+          waiting = runner.getUIContext().confirm("SYNTHETIC_PRIVATE_TITLE", "SYNTHETIC_PRIVATE_ARGS");
+          await waitFor((value) => value.state === "input_required");
+          break;
+        case "close":
+          assert.ok(waiting);
+          dialog.resolve(true);
+          await waiting;
+          await promptEnded.promise;
+          waiting = undefined;
+          promptEnded = undefined;
+          break;
+        case "tentative-error":
+          await runner.emit(event("tool_execution_end", { isError: true }));
+          await runner.emit(event("agent_end"));
+          await boundary("error");
+          break;
+        case "complete": await settle("completed"); break;
+        case "error": await settle("error"); break;
+        case "abort": await settle("aborted"); break;
+        case "stop":
+          assert.equal(waiting, undefined);
+          await runner.emit(event("session_shutdown"));
+          assert.deepEqual(errors, []);
+          assert.equal(evidence.sensitiveReads, 0);
+          assert.equal(evidence.networkCalls, 0);
+          process.send({ id: message.id, evidence, stopped: true });
+          process.disconnect();
+          return;
+        default: assert.fail("unknown peer command");
+      }
+      process.send({ id: message.id, status: await status(), evidence });
+    } catch (error) {
+      process.send({ id: message.id, failure: String(error) });
+      throw error;
+    }
+  }
+}
+async function* peerMessages() {
+  const { on } = await import("node:events");
+  for await (const [message] of on(process, "message")) yield message;
+}
+
 try {
-  if (mode === "startup-recovery") await exerciseStartupRecovery();
+  if (mode === "attention-peer") await exerciseAttentionPeer();
+  else if (mode === "startup-recovery") await exerciseStartupRecovery();
   else if (mode === "startup-order") await exerciseStartupOrder();
   else if (mode === "dialog-policy") await exerciseDialogPolicy();
   else if (mode === "prompt-order") await exercisePromptOrder();

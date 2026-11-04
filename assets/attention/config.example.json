@@ -1,0 +1,8 @@
+{
+  "pollIntervalMs": 1000,
+  "sources": [
+    {"id":"windows-copilot","label":"Windows Copilot","kind":"copilot","path":"C:/Users/operator/.copilot/session-state"},
+    {"id":"windows-pi","label":"Windows pi","kind":"pi","path":"C:/Users/operator/.traygoblin/pi"},
+    {"id":"ubuntu-pi","label":"Ubuntu pi","kind":"pi","path":"\\\\wsl.localhost\\Ubuntu\\home\\operator\\.traygoblin\\pi","wsl_distro":"Ubuntu"}
+  ]
+}

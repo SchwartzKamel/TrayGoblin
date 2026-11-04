@@ -2,9 +2,11 @@
 
 **Audience:** Operators and Agents
 
-TrayGoblin is a native Windows notification-area companion for GitHub Copilot CLI. It reads
-Copilot's local session state read-only and reports **Working**, **Idle**, or
-**Attention needed** together with the model, repository, and last completed turn duration.
+TrayGoblin is a native Windows tray for concurrent pi/Copilot sessions on Windows
+and local WSL: **Working**, **Idle**, **Attention needed**, attributed notifications
+and a persistent session list. Pi input/final errors alert; Copilot persisted
+errors only (input unavailable); completion is quiet. Implementation is unpublished,
+not real Windows/WSL delivery or performance evidence.
 
 This page is the map of the documentation. Two audiences are used everywhere:
 
@@ -76,16 +78,23 @@ agent responsibility, the page says who does what.
 | [`specs/tray-status.md`](../specs/tray-status.md) | Executable acceptance criteria and their verifying commands |
 | [`specs/adr/0001-native-rust-tray.md`](../specs/adr/0001-native-rust-tray.md) | Accepted architecture decision |
 | [`IMPLEMENTATION_PLAN.md`](../IMPLEMENTATION_PLAN.md) | Historical completed MVP tasks |
-| [Attention follow-up plan](../.wgm/IMPLEMENTATION_PLAN.md) | Build STOPPED: M1 accepted `0d79111`, M2 accepted `058ef74` (93 tests); M3 candidate `e193b6c` BLOCKED/unaccepted after three cycles; M4/M5 pending, M6 actual Windows/WSL/performance blocked |
+| [Attention follow-up plan](../.wgm/IMPLEMENTATION_PLAN.md) | Sole authority for the current attention candidate, exact gate results, review/audit verdicts and acceptance status |
 | [Attention spec](../.wgm/specs/session-attention.md) | Follow-up behavior, defaults, limitations, and exact validation boundaries |
 | [Attention glossary](../.wgm/specs/CONTEXT.md) | Follow-up source, instance, and episode vocabulary |
 | [`AGENTS.md`](../AGENTS.md) | Protected historical MVP command sheet; [Development](agent/development.md#active-follow-up-routing) clarifies active routing |
 
 Completion claims concern the historical MVP only. The
-[M3 checkpoint](architecture.md#m3-blocked-checkpoint) retains spec CHANGES-REQUESTED for a
-source-reset/Copilot-episode collision despite recorded passing checks. It is source-traced,
-not runtime reproduced; diagnostic setup approval was denied. No attention GUI or attention
-demo is available.
+[M3 recovery history](architecture.md#m3-recovery-checkpoint) retains rejected-candidate
+dissent AND the later compiled proof/fix/independent acceptance, not an active blocker.
+The current native wiring is cross-compiled; M5 provides a continuous offline
+pi-host→Rust implementation demo and standalone package resources, not release readiness.
+M5 remains in_progress/unaccepted pending actual disposition; M6 actual
+Windows/WSL/performance evidence remains BLOCKED. Consult the active plan above
+for current candidate/gates/verdicts, not duplicated status or historical reports.
+The [standalone setup source](../assets/attention/SETUP.md) ships as resources/SETUP.md;
+the [pi integration](../integrations/pi/README.md) explains explicit persistent opt-in.
+Attention audit history/dispositions remain in the
+[attention audit index](../.wgm/docs/audit/README.md); RED is not relabeled GREEN.
 
 Validate this documentation set with:
 

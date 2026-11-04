@@ -30,19 +30,20 @@ The file is optional. When it does not exist, TrayGoblin uses the defaults below
 
 | Key | Type | Default | Meaning |
 |---|---|---|---|
-| `pollIntervalMs` | number | `1000` | How often Copilot session state is polled, in milliseconds. Accepted range is 500–10,000. |
+| `pollIntervalMs` | number | `1000` | How often configured sources are polled, in milliseconds. Accepted range is 500–10,000. |
 | `sessionRoot` | string or `null` | `null` | Overrides the Copilot session folder. When `null`, `%USERPROFILE%\.copilot\session-state` is used. |
-| `sources` | array | omitted | Replaces the aggregate attention sources; see below. Currently used by the aggregate probe/core, not the legacy tray. |
+| `sources` | array | omitted | Replaces sources for the current aggregate tray and `--all-sessions` probe; see below. |
 
 `poll_interval_ms` and `session_root` are accepted as alternative spellings of the same two keys.
 Any other key is ignored, so a configuration file written by a future version stays usable.
 
-## Aggregate attention sources (probe/core)
+## Aggregate attention sources
 
-The aggregate path is available through `tray-goblin-probe --all-sessions`.
-Native tray integration is a subsequent implementation task; the existing GUI
-and default probe retain their original single-session behavior for now.
-Without `--all-sessions`, the probe still emits exactly its original six fields.
+The current tray uses the aggregate engine; the diagnostic path selects it with
+`tray-goblin-probe --all-sessions`. M1–M4 are accepted at implementation/cross-build
+tier, not real Windows/WSL delivery (M6). Without `--all-sessions`, the probe still
+emits exactly its original six fields. The standalone ZIP setup is in installed
+`resources/SETUP.md`; it needs no source checkout.
 
 **Probe loading differs from the GUI:** it never autoloads the GUI settings file.
 Pass `--config <path>` explicitly; without it the probe constructs defaults.
@@ -123,22 +124,23 @@ or session list is visible, not a guarantee of coverage beyond the scan limit. C
 reads at most 256 KiB of appended events per session per poll, retries incomplete
 JSONL records, diagnoses/discards overlong records in bounded chunks, and ignores
 unknown events/fields. Large historical logs may need multiple polls to initialize,
-without replaying historical attention. Source polling here is synchronous:
-worker isolation and notification delivery are separate tasks, not claims made
-by the aggregate probe.
+without replaying historical attention. The aggregate probe is synchronous;
+the current tray uses one isolated worker per source and the shared bounded
+dispatcher. Neither the CLI probe nor cross-compilation proves native delivery.
 
 ### Explicit aggregate probe example
 
-From the checkout root on Linux/WSL, use the existing compiled probe below (the equivalent
-build-and-run invocation is
-`cargo run --bin tray-goblin-probe -- --config "$example_dir/config.json" --all-sessions`).
-This creates only external temporary configuration and a synthetic HOME; no real user settings,
-new repository scripts or fixtures are needed:
+From the checkout root on Linux/WSL, build the executable and explicitly select
+synthetic configuration. This creates only external temporary config/HOME, never
+loads real GUI/pi settings, and does not require the Windows executable. Run the
+whole fence: a failed prerequisite exits before an existing binary can mask a
+failed build. Retain `example_dir` for the negative examples below:
 
 ```bash
-example_dir=$(mktemp -d /tmp/traygoblin-probe-XXXXXX)
-mkdir -p "$example_dir/home"
-printf '%s\n' '{"pollIntervalMs":1000,"sources":[{"id":"fixture-copilot","label":"Fixture Copilot","kind":"copilot","path":"tests/fixtures/live-session"}]}' > "$example_dir/config.json"
+cargo build --bin tray-goblin-probe || exit $?
+example_dir=$(mktemp -d /tmp/traygoblin-probe-XXXXXX) || exit $?
+mkdir -p "$example_dir/home" || exit $?
+printf '%s\n' '{"pollIntervalMs":1000,"sources":[{"id":"fixture-copilot","label":"Fixture Copilot","kind":"copilot","path":"tests/fixtures/live-session"}]}' > "$example_dir/config.json" || exit $?
 env -i PATH="$PATH" HOME="$example_dir/home" XDG_CONFIG_HOME="$example_dir/home/.config" \
   ./target/debug/tray-goblin-probe --config "$example_dir/config.json" --all-sessions
 ```
@@ -192,8 +194,10 @@ error: poll interval 499ms is outside the accepted 500-10000ms range
 error: --session-root cannot override explicit sources with --all-sessions
 ```
 
-These examples were checked with the existing compiled probe and synthetic HOME/config only,
-not a freshly built candidate. They are not attention GUI/controller or Windows evidence.
+The equivalent build/run command is
+`cargo run --bin tray-goblin-probe -- --config "$example_dir/config.json" --all-sessions`.
+These synthetic explicit-config examples are checked by the attention demo's
+release CLI controls; they are not Windows delivery evidence.
 
 ## Examples
 
@@ -242,12 +246,13 @@ Use forward slashes, or escape backslashes as `\\`, so the value stays valid JSO
 
 | Interval | Effect |
 |---|---|
-| 500 ms | Fastest supported reaction, roughly one second worst case. Highest wake-up rate. |
-| 1,000 ms (default) | Meets the two-second state-update expectation with a minimal footprint. |
-| 2,000–10,000 ms | Fewer wake-ups; state changes may take up to twice the interval to appear. |
+| 500 ms | Fastest supported attention/clear target: 1.5s (2P+500ms). Highest wake-up rate. |
+| 1,000 ms (default) | Attention/clear target: 2.5s after delivered lifecycle hooks. |
+| 2,000–10,000 ms | Fewer wake-ups; attention/clear target remains 2P+500ms. |
 
-Polling only reads bytes appended since the previous poll, so a larger interval saves wake-ups
-rather than avoiding re-reads.
+Copilot event reads are incremental. Pi re-reads bounded scalar status files;
+a larger interval saves wake-ups. These are policy targets, not measured Windows
+field performance; M6 actual observations remain required.
 
 ## Configuration and uninstall
 

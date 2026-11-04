@@ -2,12 +2,14 @@
 
 **Audience:** Operators and Agents
 
-TrayGoblin is a lightweight Windows notification-area companion for GitHub Copilot CLI. It observes
-Copilot's local session state read-only and shows whether the active turn is **Working**, **Idle**,
-or **Attention needed**, together with the model, repository, and last completed turn duration.
+TrayGoblin is a native Windows notification-area companion for concurrent pi and
+GitHub Copilot CLI sessions on Windows and local WSL. It shows **Working**, **Idle**
+or **Attention needed** and a persistent, attention-first session list. Pi alerts
+for all explicit blocking dialogs and final run errors; Copilot alerts only for
+new persisted session errors (input detection is unavailable). Completion is quiet.
 
 - Native Rust process targeting Windows 10/11 x86-64 — no Electron, no Node.js sidecar, no service
-- One-second default polling with a two-second state-update expectation
+- One-second default polling; attention/clear target within two intervals plus 500 ms
 - Content-free by construction: prompts, responses, tool arguments, tool results, tokens, and
   credentials are never modeled, stored, logged, or displayed; temporary raw-byte scanning is
   distinct from allow-listed field deserialization (see [Privacy](docs/operator/privacy.md))
@@ -21,18 +23,19 @@ performance tooling, Operator/Agent documentation, and the end-to-end release-ca
 implemented and validated. See [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) for authoritative
 historical MVP task state.
 
-**Planned follow-up, not shipped:** multi-session pi/Copilot attention alerts for Windows and WSL.
-The [follow-up plan](.wgm/IMPLEMENTATION_PLAN.md), [attention spec](.wgm/specs/session-attention.md),
-and [glossary](.wgm/specs/CONTEXT.md) govern that work. Pi input/error alerts and Copilot error-only
-alerts are planned; successful completion stays quiet. Actual Windows/WSL interaction and resource
-measurements remain blocked on Operator validation (M6), not proven by a Linux cross-build.
-
-**Build STOPPED:** M1 is accepted at `0d79111`; M2 at `058ef74` (93 workspace tests).
-M3 candidate `e193b6c` is **BLOCKED/unaccepted after three recovery cycles**: recorded 41 targeted /
-122 workspace passes, rugged RUGGED and quality PASS do not override spec CHANGES-REQUESTED.
-The [source-reset/Copilot-episode collision](docs/architecture.md#m3-blocked-checkpoint) is traced
-only, not runtime reproduced; diagnostic setup approval was denied. M4/M5 remain pending:
-there is no attention GUI or attention demo.
+**Attention implementation, UNPUBLISHED:** M1–M4 are accepted at implementation/
+compilation tier (M4 `d94c85c`). M5 packaging/setup/continuous offline demo is
+in_progress and unaccepted pending actual disposition. The
+[active plan](.wgm/IMPLEMENTATION_PLAN.md) is the sole authority for the current
+candidate, exact gate results, review/audit verdicts and next acceptance action.
+The [attention spec](.wgm/specs/session-attention.md) and
+[glossary](.wgm/specs/CONTEXT.md) govern behavior and terminology; root MVP artifacts
+are history.
+The historical M3 blocker was reproduced, repaired and independently accepted;
+its [dissent/history](docs/architecture.md#m3-recovery-checkpoint) is retained.
+Actual Windows/WSL interaction and 50 MB/5% evidence remain **M6 BLOCKED**.
+No Linux cross-build, offline pi host, OCI CLI or structural docs check proves
+Windows notification delivery, performance or release readiness.
 
 No release has been published from this repository yet. Until one is, build the portable archive
 yourself with `bash scripts/package-release.sh 0.1.0`. Releases are previews: Windows x86-64 only,
@@ -77,7 +80,11 @@ Start at the [documentation index](docs/README.md). It is organized around two a
 powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
 ```
 
-Then read [First run](docs/operator/first-run.md).
+Then read [First run](docs/operator/first-run.md). The archive includes standalone
+`resources/SETUP.md`, pi integration and Windows collectors. The installer persists
+these below the install root; explicitly `pi install` that installed package to opt
+in. Never point pi at an extraction folder you plan to delete; installation does
+not change pi settings automatically.
 
 **Agents** — on Linux, WSL, or another host with stable Rust and the MinGW-w64 x86-64 toolchain
 ([setup instructions](docs/agent/development.md#toolchain)):
@@ -97,10 +104,16 @@ cargo test --workspace
 bash scripts/validate-toolchain.sh
 bash scripts/check-docs.sh
 bash scripts/demo.sh 0.1.0
+bash scripts/demo-attention.sh --container podman
 ```
 
-Windows interaction and the 50 MB / 5% resource budgets are verified manually with
-`scripts/measure-performance.ps1`; see [Testing](docs/agent/testing.md).
+The attention demo keeps two installed pi1.4 runtimes alive together through the
+shipped Rust dispatcher, with external machine-readable evidence. Its cached
+Debian OCI check is CLI-only, nonroot/network-none/read-only. Set an external
+`TRAY_GOBLIN_EVIDENCE_DIR` to retain exact journey/engine commands and digests.
+Windows interaction is collected INTERACTIVELY by `scripts/test-attention-windows.ps1`;
+`scripts/measure-performance.ps1 -Path` binds the same exact executable/PID/hash.
+Both reject Linux. See [Testing](docs/agent/testing.md).
 
 ## Repository map
 

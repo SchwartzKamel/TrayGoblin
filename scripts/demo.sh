@@ -47,6 +47,17 @@ readonly EXPECTED_ARCHIVE_ENTRIES=(
   "install.ps1"
   "tray-goblin.exe"
   "uninstall.ps1"
+  "integrations/"
+  "integrations/pi/"
+  "integrations/pi/README.md"
+  "integrations/pi/package.json"
+  "integrations/pi/tray-goblin.js"
+  "resources/"
+  "resources/SETUP.md"
+  "resources/config.example.json"
+  "resources/build.json"
+  "resources/test-attention-windows.ps1"
+  "resources/measure-performance.ps1"
 )
 
 fail() {

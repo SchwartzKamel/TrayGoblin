@@ -6,14 +6,14 @@
 .DESCRIPTION
     Samples the running TrayGoblin process for a fixed window and fails when
     the peak working set exceeds 50 MB or the average CPU use exceeds 5%.
-    Output is content-free: only the process name, sample counts, and resource
-    numbers are reported. Copilot session state is never read.
+    Output is content-free: explicit process/build identity, sample counts and
+    resource numbers only. Copilot session state is never read.
 
     Run this on Windows 10 or 11 before promoting a preview build to stable.
 
 .PARAMETER Path
-    Executable to start when no TrayGoblin process is already running. The
-    started process is stopped again when the measurement finishes.
+    Exact executable to measure (or start). An existing process must match its
+    canonical path and SHA256. A temporary process is stopped after measurement.
 
 .PARAMETER ProcessName
     Process name to measure. Defaults to "tray-goblin".
@@ -34,6 +34,10 @@
 .PARAMETER JsonPath
     Optional path for a content-free JSON report.
 
+.PARAMETER BuildSha
+    Actual build commit when no digest-bound resources/build.json is available.
+    Never inferred from an unrelated checkout; packaged collectors use the manifest.
+
 .EXAMPLE
     pwsh -NoProfile -File scripts/measure-performance.ps1 -DurationSeconds 30
 #>
@@ -49,7 +53,8 @@ param(
     [int] $MaxWorkingSetMb = 50,
     [ValidateRange(1, 100)]
     [int] $MaxIdleCpuPercent = 5,
-    [string] $JsonPath
+    [string] $JsonPath,
+    [string] $BuildSha
 )
 
 Set-StrictMode -Version Latest
@@ -98,10 +103,44 @@ function Resolve-DefaultExecutable {
     return (Join-Path (Join-Path (Join-Path $localAppData 'Programs') $script:ApplicationName) 'tray-goblin.exe')
 }
 
-if (-not (Test-IsWindowsHost)) {
-    Write-Warning 'The 50 MB / 5% budget is specified for Windows 10 and 11; results from another host are indicative only.'
+# Pure identity guard is also exercised by offline negative controls; it does
+# not discover processes or collect resource samples on their behalf.
+function Assert-CandidateIdentity {
+    param($Candidate, [string] $ExpectedPath, [string] $ExpectedSha256, [int] $ExpectedPid)
+    if ($Candidate.Id -ne $ExpectedPid -or -not $Candidate.Path -or
+        -not [string]::Equals([IO.Path]::GetFullPath($Candidate.Path), $ExpectedPath, [StringComparison]::OrdinalIgnoreCase)) {
+        throw 'The measured PID/path does not match the candidate.'
+    }
+    if ((Get-FileHash -LiteralPath $Candidate.Path -Algorithm SHA256).Hash.ToLowerInvariant() -ne $ExpectedSha256) {
+        throw 'The measured executable SHA256 does not match the candidate.'
+    }
 }
 
+if (-not (Test-IsWindowsHost)) {
+    Stop-MeasurementScript -Message 'Windows 10/11 is required; non-Windows measurements cannot satisfy the field resource gate.'
+}
+
+if (-not $Path) { $Path = Resolve-DefaultExecutable }
+if (-not $Path -or -not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+    Stop-MeasurementScript -Message 'supply -Path to the exact candidate executable.'
+}
+$Path = (Resolve-Path -LiteralPath $Path).Path
+if ($ProcessName -ne [IO.Path]::GetFileNameWithoutExtension($Path)) {
+    Stop-MeasurementScript -Message 'ProcessName must match the candidate executable filename.'
+}
+$executableSha256 = (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+$manifestPath = Join-Path (Split-Path -Parent $Path) 'resources/build.json'
+$worktreeDirty = $null
+if (Test-Path -LiteralPath $manifestPath) {
+    $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+    if ($manifest.executableSha256 -ne $executableSha256) { Stop-MeasurementScript -Message 'packaged build digest does not match -Path.' }
+    if ($BuildSha -and $BuildSha -ne $manifest.buildCommit) { Stop-MeasurementScript -Message 'BuildSha differs from packaged identity.' }
+    $BuildSha = $manifest.buildCommit
+    $worktreeDirty = $manifest.worktreeDirty
+}
+if ($BuildSha -notmatch '^[0-9a-f]{40}$') {
+    Stop-MeasurementScript -Message 'use packaged build.json or supply the actual -BuildSha (40 hex characters).'
+}
 $startedProcess = $null
 $existing = @(Get-Process -Name $ProcessName -ErrorAction SilentlyContinue)
 
@@ -112,6 +151,7 @@ if ($existing.Count -gt 1) {
 
 if ($existing.Count -eq 1) {
     $target = $existing[0]
+    Assert-CandidateIdentity -Candidate $target -ExpectedPath $Path -ExpectedSha256 $executableSha256 -ExpectedPid $target.Id
     Write-Step "Measuring the running `"$ProcessName`" process."
 } else {
     if (-not $Path) {
@@ -140,6 +180,10 @@ if ($existing.Count -eq 1) {
 
 try {
     $target.Refresh()
+    Assert-CandidateIdentity -Candidate $target -ExpectedPath $Path -ExpectedSha256 $executableSha256 -ExpectedPid $target.Id
+    $measuredPid = $target.Id
+    $processStartUtc = $target.StartTime.ToUniversalTime().ToString('o')
+    $startedUtc = [DateTime]::UtcNow.ToString('o')
     if ($target.HasExited) {
         Stop-MeasurementScript -Message "the `"$ProcessName`" process exited before the measurement started." `
             -Remedy 'Start TrayGoblin, confirm the tray icon appears, then run this script again.'
@@ -168,6 +212,10 @@ try {
             $peakWorkingSetBytes = $target.WorkingSet64
         }
 
+        Assert-CandidateIdentity -Candidate $target -ExpectedPath $Path -ExpectedSha256 $executableSha256 -ExpectedPid $measuredPid
+        if ($target.StartTime.ToUniversalTime().ToString('o') -ne $processStartUtc) {
+            throw 'The measured process lifetime changed.'
+        }
         $sampleCount++
     }
 
@@ -189,11 +237,25 @@ if ($elapsedSeconds -le 0) {
 $peakWorkingSetMb = [math]::Round($peakWorkingSetBytes / 1MB, 2)
 $averageCpuPercent = [math]::Round((100.0 * $cpuSeconds) / ($elapsedSeconds * $processorCount), 2)
 
-$workingSetPassed = $peakWorkingSetMb -le $MaxWorkingSetMb
-$cpuPassed = $averageCpuPercent -le $MaxIdleCpuPercent
+# Gate on raw measurements, not rounded presentation values at the boundary.
+$workingSetPassed = ($peakWorkingSetBytes / 1MB) -le $MaxWorkingSetMb
+$cpuPassed = ((100.0 * $cpuSeconds) / ($elapsedSeconds * $processorCount)) -le $MaxIdleCpuPercent
+if ((Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant() -ne $executableSha256) {
+    Stop-MeasurementScript -Message 'candidate executable changed during measurement.'
+}
 $passed = $workingSetPassed -and $cpuPassed
 
 $report = [ordered]@{
+    evidenceTier        = 'windows-process-resource-measurement'
+    startedUtc          = $startedUtc
+    finishedUtc         = [DateTime]::UtcNow.ToString('o')
+    buildSha            = $BuildSha
+    worktreeDirty       = $worktreeDirty
+    executablePath      = $Path
+    executableSha256    = $executableSha256
+    pid                 = $measuredPid
+    processStartUtc     = $processStartUtc
+    windowsVersion      = [Environment]::OSVersion.VersionString
     process             = $ProcessName
     durationSeconds     = [math]::Round($elapsedSeconds, 2)
     samples             = $sampleCount

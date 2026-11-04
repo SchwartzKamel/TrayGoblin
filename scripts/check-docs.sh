@@ -39,6 +39,12 @@ readonly REQUIRED_FILES=(
   "docs/agent/release-responsibilities.md"
   "docs/agent/documentation-standards.md"
   "scripts/check-docs.sh"
+  "scripts/demo-attention.sh"
+  "scripts/demo-attention-host.mjs"
+  "scripts/test-release-docs.mjs"
+  "scripts/test-attention-windows.ps1"
+  "assets/attention/SETUP.md"
+  "assets/attention/config.example.json"
 )
 
 failures=0
@@ -529,6 +535,26 @@ for doc in "${DOC_FILES[@]}"; do
   done < <(prose_of "${doc}" | grep -E '\bT[0-9]+\b|\bTZ\b' || true)
 done
 info "documented task states agree with IMPLEMENTATION_PLAN.md"
+
+# M5 adds an executable docs signal: exact release fences (including negative
+# control flow) and public explicit --config aggregate examples, not just grep.
+# Existing structural/link/privacy/MVP assertions above remain unchanged.
+# ---------------------------------------------------------------------------
+section "Attention setup and executable release documentation"
+# ---------------------------------------------------------------------------
+require_phrase "README.md" 'M6 BLOCKED|M6.*BLOCKED' "the unverified Windows/WSL evidence boundary"
+require_phrase "docs/operator/installation.md" 'pi install' "explicit persistent pi opt-in"
+require_phrase "docs/operator/installation.md" 'pi remove' "explicit pi opt-out before uninstall"
+require_phrase "docs/operator/configuration.md" '\-\-config' "explicit aggregate probe configuration"
+require_phrase "docs/agent/testing.md" 'demo-attention\.sh --container podman' "the continuous offline attention gate"
+if command -v node >/dev/null 2>&1; then
+  for script_path in scripts/{demo-attention-host,test-release-docs,test-pi-host}.mjs; do
+    if node --check "${script_path}"; then pass; else report "Node syntax failed: ${script_path}"; fi
+  done
+  if node scripts/test-release-docs.mjs; then pass; else report "executable release/config documentation controls failed"; fi
+else
+  report "Node is required for executable M5 documentation controls"
+fi
 
 # ---------------------------------------------------------------------------
 section "Shell script syntax"

@@ -14,10 +14,21 @@ How to build, run, and change TrayGoblin. Read
 | MinGW-w64 x86-64 GCC (`x86_64-w64-mingw32-gcc`) | Linker for that target, wired up in `.cargo/config.toml` |
 | `file` | Verifies the produced binary really is a PE32+ x86-64 image |
 | `zip`, `unzip`, `sha256sum` | Only needed for packaging |
-| PowerShell 7 (`pwsh`) | Only needed to run the installer test script |
+| PowerShell 7 (`pwsh`) | Installer controls and Windows field/resource collectors |
+| Node + installed pi1.4.0, Podman + cached Debian bookworm-slim | Actual offline host journey and separate CLI-only OCI check (no pulling) |
 
 Install the target with `rustup target add x86_64-pc-windows-gnu`. If the linker is missing, the
 validation script fails with an installation hint rather than a link error.
+
+## Offline gate prerequisites
+
+Follow the shipped [pi package/cache provisioning and check recipe](../../integrations/pi/README.md#offline-gate-prerequisites).
+It checks the actual npm pi1.4.0 manifest/CLI help, package placement or absolute
+`PI_CODING_AGENT_PACKAGE` override, and cached `docker.io/library/debian:bookworm-slim`.
+Online preparation is a SEPARATELY authorized operator prerequisite, NEVER a test
+or offline-gate step. Installed host and cached image must already exist.
+Under isolated HOME select verified public Podman root/runroot explicitly, not
+credential/user-config mounts. The gate never pulls or enables network.
 
 ## First commands
 
@@ -26,7 +37,8 @@ bash scripts/validate-toolchain.sh
 ```
 
 This runs the workspace tests, cross-builds `tray-goblin.exe`, and asserts the artifact is a PE32+
-x86-64 executable. It is the single command that proves a fresh environment is usable.
+x86-64 executable. It proves the Rust/cross-build environment, not pi-host,
+OCI or real Windows runtime readiness.
 
 Inspect behaviour without Windows using the diagnostic probe:
 
@@ -46,12 +58,15 @@ MVP. Active attention work uses the [follow-up plan](../../.wgm/IMPLEMENTATION_P
 Protected root `AGENTS.md` retains historical forward-contract/T6 wording; architecture and
 manual-release docs now exist. Use this routing clarification without changing that protected file.
 
-**Build STOPPED:** M1 accepted `0d79111`, M2 accepted `058ef74` (93 workspace tests).
-[M3 candidate `e193b6c`](../architecture.md#m3-blocked-checkpoint) is BLOCKED/unaccepted after three
-recovery cycles; do not proceed to M4 integration. M4/M5 are pending, M6 actual Windows/WSL and
-performance checks blocked. Historical MVP completion does not certify the attention follow-up.
-The [Testing inventory](testing.md#attention-checkpoint-gates) separates accepted M1/M2 gates,
-M3's recorded-but-unaccepted checks and the MVP-only demo.
+M1–M4 are accepted at implementation/compilation tier. M5 is in_progress and
+unaccepted pending actual disposition. The follow-up plan above is the sole
+authority for the current candidate, exact gate results, review/audit verdicts
+and next acceptance action; this guide does not duplicate transient review state.
+[M3 recovery history](../architecture.md#m3-recovery-checkpoint) retains the rejected
+candidate and dissent, then compiled proof/fix and later independent acceptance;
+do not resurrect it as a current blocker. M6 actual Windows/WSL and 50 MB/5%
+evidence remains BLOCKED. The [Testing inventory](testing.md#attention-checkpoint-gates)
+separates each evidence tier. Historical MVP completion does not certify attention.
 
 ## Repository layout
 
@@ -130,7 +145,10 @@ bash scripts/check-docs.sh
 
 Record exact commands/results in the task's governing plan: root `IMPLEMENTATION_PLAN.md` for
 historical MVP tasks, `.wgm/IMPLEMENTATION_PLAN.md` for attention work. A task's exact gate must
-exit zero, but passing checks do not override a blocking spec review or authorize resuming M4.
+exit zero, but passing checks do not override independent acceptance gates or
+prove Windows delivery. Authors do not audit/accept themselves. The parent owns
+candidate freezing, independent reviews/audit and acceptance; use the active plan
+for current candidate/gates/verdicts.
 
 ## Related
 

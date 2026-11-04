@@ -2,14 +2,15 @@
 
 **Audience:** Operators
 
-TrayGoblin ships as a portable Windows x86-64 ZIP that installs into your own user profile. No
-administrator rights are required at any point, and nothing is written outside your profile.
+TrayGoblin is packaged as an UNPUBLISHED Windows x86-64 ZIP, installed per-user.
+No administrator rights are required. Default paths stay below your profile.
+Implementation/cross-build validation is not real Windows/WSL release evidence.
 
 Requirements:
 
 - Windows 10 or Windows 11, x86-64
-- GitHub Copilot CLI installed and used at least once, so
-  `%USERPROFILE%\.copilot\session-state` exists
+- Pi 1.4.0 with the explicit opt-in integration, and/or Copilot CLI with local
+  `%USERPROFILE%\.copilot\session-state`; WSL is optional and explicitly configured
 - Windows PowerShell 5.1 or PowerShell 7+
 
 ## 1. Obtain the archive
@@ -53,15 +54,28 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
 
 The installer:
 
-1. Copies `tray-goblin.exe`, `install.ps1`, `uninstall.ps1`, `LICENSE`, and `README.txt` to
-   `%LOCALAPPDATA%\Programs\TrayGoblin`.
-2. Writes an ownership marker file, `.tray-goblin-install`, so a later repair or uninstall never
-   deletes a folder it does not own.
+1. Validates the payload and writes ownership marker `.tray-goblin-install`
+   BEFORE copying, preserving repair ownership after a partial installation.
+2. Copies `tray-goblin.exe`, scripts/license/README, `integrations/pi/` and
+   `resources/` to `%LOCALAPPDATA%\Programs\TrayGoblin`. Resources include complete
+   standalone setup, an example config, build/executable identity and both
+   Windows collectors; no source checkout is needed for those instructions.
 3. Creates `TrayGoblin.lnk` in your per-user Startup folder.
 4. Starts TrayGoblin, so the icon appears immediately.
 
 Re-running the installer is safe: it stops only the instance running from the installed path,
-replaces the files, and rewrites the shortcut.
+replaces the files, and rewrites the shortcut. It never silently edits pi settings.
+The extracted folder can be removed after installation. To opt in persistently:
+
+```powershell
+$tg = Join-Path $env:LOCALAPPDATA 'Programs\TrayGoblin'
+pi install "$tg\integrations\pi"
+```
+
+Restart/reload pi. Local packages reference that installed path (pi does not copy
+it). For WSL durable-copy/opt-in, labels and source paths see installed
+`resources/SETUP.md` ([source](../../assets/attention/SETUP.md)) and
+[First run](first-run.md). Never register a temporary extraction directory.
 
 `%LOCALAPPDATA%` is your per-user program-data location; `%APPDATA%` is the separate per-user
 configuration location. The standard command uses all defaults. The options below are only for
@@ -97,16 +111,25 @@ Extract the newer archive to a scratch folder and run `install.ps1` again. Your 
 
 ## Uninstalling
 
+Remove the explicit pi opt-in FIRST and reload/quit pi, then use the persistent
+uninstaller even if the extracted folder is gone:
+
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\uninstall.ps1
+$tg = Join-Path $env:LOCALAPPDATA 'Programs\TrayGoblin'
+pi remove "$tg\integrations\pi"
+powershell -NoProfile -ExecutionPolicy Bypass -File "$tg\uninstall.ps1"
 ```
+
+In WSL, `pi remove "$HOME/.local/share/traygoblin/pi"` and reload/quit before
+removing that separate durable copy. Uninstall never edits pi settings or deletes
+producer status roots on your behalf.
 
 The uninstaller removes the Startup shortcut first, stops the instance running from the installed
 path, then deletes the installation folder. Your configuration is preserved by default and the
 script prints where it was kept. To remove it as well:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\uninstall.ps1 -RemoveConfiguration
+powershell -NoProfile -ExecutionPolicy Bypass -File "$tg\uninstall.ps1" -RemoveConfiguration
 ```
 
 `-RemoveConfiguration` deletes `config.json`, and removes `%APPDATA%\TrayGoblin` only when nothing
@@ -128,6 +151,9 @@ installation, the script stops instead of deleting files it does not own.
 - It never requires or requests elevation.
 - It never writes to `%ProgramFiles%`, `HKEY_LOCAL_MACHINE`, or any machine-wide location.
 - It never changes Copilot CLI configuration, telemetry settings, or session data.
+- It never registers/removes pi packages silently. Only explicit `pi install` /
+  `pi remove` commands change pi settings; integration/resources persist in the
+  marked install root until uninstall.
 
 ## Related
 

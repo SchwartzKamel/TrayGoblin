@@ -66,6 +66,7 @@ require_command zip "Install the 'zip' utility, for example: apt-get install zip
 require_command unzip "Install the 'unzip' utility, for example: apt-get install unzip"
 require_command sha256sum "Install GNU coreutils so SHA-256 checksums can be generated."
 require_command file "Install the 'file' utility so the Windows artifact can be verified."
+require_command git "Install Git so the build commit can be recorded without guessing."
 
 cargo_version="$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -n 1)"
 [[ -n "${cargo_version}" ]] ||
@@ -76,7 +77,7 @@ if [[ "${cargo_version}" != "${version}" ]]; then
     "Update Cargo.toml, or package '${cargo_version}' instead."
 fi
 
-for required_file in install.ps1 uninstall.ps1 LICENSE; do
+for required_file in install.ps1 uninstall.ps1 LICENSE integrations/pi/tray-goblin.js integrations/pi/package.json integrations/pi/README.md assets/attention/SETUP.md assets/attention/config.example.json scripts/test-attention-windows.ps1 scripts/measure-performance.ps1; do
   [[ -f "${required_file}" ]] ||
     fail "release payload file '${required_file}' is missing." "Restore it before packaging a release."
 done
@@ -108,6 +109,25 @@ cp "${WINDOWS_BINARY}" "${payload_dir}/${EXECUTABLE_NAME}"
 cp install.ps1 "${payload_dir}/install.ps1"
 cp uninstall.ps1 "${payload_dir}/uninstall.ps1"
 cp LICENSE "${payload_dir}/LICENSE"
+mkdir -p "${payload_dir}/integrations/pi" "${payload_dir}/resources"
+cp integrations/pi/{tray-goblin.js,package.json,README.md} "${payload_dir}/integrations/pi/"
+cp assets/attention/{SETUP.md,config.example.json} "${payload_dir}/resources/"
+cp scripts/{test-attention-windows.ps1,measure-performance.ps1} "${payload_dir}/resources/"
+# Bind collectors to the actual packaged PE; dirty author builds are explicitly
+# NOT misrepresented as clean tagged release candidates.
+build_commit="$(git rev-parse --verify HEAD)"
+worktree_dirty=false
+# Metadata/pathspec-scoped inspection avoids opening either holdout directory.
+# Excluded holdouts are outside author evidence; parent freezes the full tree.
+git diff --quiet HEAD -- . ':!scenarios' ':!.wgm/scenarios' || worktree_dirty=true
+[[ -z "$(git ls-files --others --exclude-standard -- . ':!scenarios' ':!.wgm/scenarios')" ]] || worktree_dirty=true
+executable_hash="$(sha256sum "${WINDOWS_BINARY}" | cut -d ' ' -f 1)"
+printf '{"buildCommit":"%s","worktreeDirty":%s,"executableSha256":"%s","published":false}\n' \
+  "${build_commit}" "${worktree_dirty}" "${executable_hash}" >"${payload_dir}/resources/build.json"
+# The spec's checkout-origin field command names this exact built PE. Preserve
+# the SAME digest-bound identity beside it as well as inside the portable ZIP.
+mkdir -p "$(dirname "${WINDOWS_BINARY}")/resources"
+cp "${payload_dir}/resources/build.json" "$(dirname "${WINDOWS_BINARY}")/resources/build.json"
 
 cat >"${payload_dir}/README.txt" <<EOF
 TrayGoblin ${version} (Windows x86-64, portable)
@@ -128,10 +148,20 @@ Verify this download:
   Compare the SHA-256 of ${archive_stem}.zip with ${archive_stem}.zip.sha256:
        Get-FileHash .\\${archive_stem}.zip -Algorithm SHA256
 
+Attention setup and persistent opt-in pi integration:
+  Read resources/SETUP.md. The installer copies integrations/pi and resources
+  below the install root; pi settings are NEVER edited automatically.
+  Use the INSTALLED path for pi install, not this extracted folder.
+  Remove the pi declaration and reload pi BEFORE uninstalling TrayGoblin.
+
+Status:
+  UNPUBLISHED implementation artifact; no Windows/WSL delivery or resource
+  evidence is implied. resources/build.json identifies the actual executable.
+
 Privacy:
-  TrayGoblin reads Copilot CLI session state read-only and never reads,
-  stores, or displays prompts, responses, tool arguments, tool results,
-  tokens, or credentials.
+  Local state is read-only. Only allow-listed metadata is modeled; temporary
+  raw-byte scanning is not prompt/result/argument/token/credential modeling.
+  No conversation content is stored, logged or displayed.
 EOF
 
 source_date_epoch="${SOURCE_DATE_EPOCH:-${DEFAULT_SOURCE_DATE_EPOCH}}"
@@ -183,10 +213,20 @@ rm -f "${verify_archive_path}"
 unzip -tqq "${archive_path}" >/dev/null ||
   fail "the packaged archive failed its integrity test." "Delete '${DIST_DIR}' and package again."
 
-for expected_entry in "${EXECUTABLE_NAME}" install.ps1 uninstall.ps1 LICENSE README.txt; do
-  unzip -Z1 "${archive_path}" | grep -Fxq "${archive_stem}/${expected_entry}" ||
-    fail "the archive is missing '${archive_stem}/${expected_entry}'." "Delete '${DIST_DIR}' and package again."
-done
+# Exact file AND directory allowlist; adding accidental fixtures/user data fails.
+expected_entries=(
+  "" LICENSE README.txt install.ps1 "${EXECUTABLE_NAME}" uninstall.ps1
+  integrations/ integrations/pi/ integrations/pi/README.md
+  integrations/pi/package.json integrations/pi/tray-goblin.js
+  resources/ resources/SETUP.md resources/config.example.json resources/build.json
+  resources/test-attention-windows.ps1 resources/measure-performance.ps1
+)
+expected_listing="$(for entry in "${expected_entries[@]}"; do printf '%s/%s\n' "${archive_stem}" "${entry}"; done | LC_ALL=C sort)"
+actual_listing="$(unzip -Z1 "${archive_path}" | LC_ALL=C sort)"
+[[ "${actual_listing}" == "${expected_listing}" ]] ||
+  fail "the archive does not match the exact payload allowlist." "Inspect the package before proceeding."
+packaged_executable_hash="$(unzip -p "${archive_path}" "${archive_stem}/${EXECUTABLE_NAME}" | sha256sum | cut -d ' ' -f 1)"
+[[ "${packaged_executable_hash}" == "${executable_hash}" ]] || fail "packaged PE differs from the built PE."
 
 rm -rf "${staging_root}"
 

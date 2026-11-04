@@ -11,7 +11,7 @@ memory, CPU, privacy, and manual-release constraints in
 
 ## Legacy MVP process model
 
-- The existing MVP shell is one process, one UI thread. It runs a standard Win32 message loop. Its `WM_TIMER`
+- The historical MVP shell was one process, one UI thread. It runs a standard Win32 message loop. Its `WM_TIMER`
   wakes at the configured interval below one second and once per second for slower settings;
   `app::App` enforces the configured poll due time.
 - No background service, no sidecar, no embedded browser, no network client.
@@ -54,8 +54,8 @@ Copilot CLI  ──writes──▶  %USERPROFILE%\.copilot\session-state\<sessio
 | `src/session.rs` | Parses `workspace.yaml` into repository name and active directory only, tolerating nested and aliased shapes | Neutral |
 | `src/monitor.rs` | Selects the active session, caches per-file byte offsets, applies events to a turn state machine, produces a `StatusSnapshot` | Neutral |
 | `src/status.rs` | The content-free snapshot type and the `Idle` / `Generating` / `Error` state enum | Neutral |
-| `src/attention.rs` | Accepted M2 aggregate v1 types; unaccepted M3 notification-policy candidate | Neutral |
-| `src/attention_worker.rs` | Unaccepted M3 candidate: fixed source workers, bounded mailboxes, nonblocking UI drain/stop | Neutral |
+| `src/attention.rs` | Accepted aggregate v1 types and M3 bounded notification policy | Neutral |
+| `src/attention_worker.rs` | Accepted M3 fixed source workers, bounded mailboxes, nonblocking UI drain/stop | Neutral |
 | `src/icon.rs` | Renders 32×32 tray icons from reviewable text pixel maps in `assets/`, one silhouette and palette per state | Neutral |
 | `src/actions.rs` | Menu vocabulary and pure launch-target selection; typed, content-free action errors; settings-file creation | Neutral |
 | `src/app.rs` | Decisions: when to poll, which icon variant, what the tooltip says, which effects the shell must perform | Neutral |
@@ -71,17 +71,18 @@ Windows.
 
 ### M3 recovery checkpoint
 
-**M3 remains in progress and unaccepted; mechanisms below await candidate-bound review.**
-The [active plan](../.wgm/IMPLEMENTATION_PLAN.md) records accepted M1 `0d79111` and M2 `058ef74`
-(93 workspace tests). Rejected M3 candidate `e193b6c` passed 41 targeted / 122 workspace tests
+**Current: M3 accepted `f4ef6de`; M4 accepted `d94c85c` at implementation/compilation tier.**
+The [active plan](../.wgm/IMPLEMENTATION_PLAN.md) records the current acceptance and
+external provenance. M5 packaging/demo is in progress; M6 field/performance blocked.
+The following rejected-candidate history preserves dissent, not an active M3 blocker. Rejected M3 candidate `e193b6c` passed 41 targeted / 122 workspace tests
 but retained **spec CHANGES-REQUESTED** after three recovery cycles.
 
 M3.R4 reproduces that defect through synthetic files → real monitor → owned worker → the
 same controller: root loss, same-lock log truncation, an observed empty recovery baseline,
 then a NEW persisted error reuses an acknowledged ID and receives no request (Refresh
 also stays quiet). The regression compiles and assertion-fails against exact `e193b6c`
-sources; passing prior gates did not disprove it. The correction below is core evidence,
-not acceptance. The subsequent R4 candidate `edec9fa` passed 49 targeted / 132
+sources; passing prior gates did not disprove it. That historical reproduction was
+core evidence, not acceptance by itself. The subsequent R4 candidate `edec9fa` passed 49 targeted / 132
 workspace tests and fresh rugged/spec checks, but quality review traced another
 boundary: an incomplete session lock scan still pruned the known parser. R4.1
 confirms this through the same real file → monitor → owned worker → controller path:
@@ -89,17 +90,23 @@ failed submissions lose remaining retries, exhausted errors lose Refresh, and an
 unchanged acknowledged error is reclassified as new historical state. All three
 regressions compile and assertion-fail on exact `edec9fa` before production edits.
 The membership correction below preserves the R4 allocator and root-loss repair.
-M3 is still unaccepted. M4/M5 remain pending with no attention GUI/demo; M6 actual
-Windows/WSL interaction and performance remain blocked.
+The final M3 candidate `e1221e2` passed 52 targeted/136 workspace checks and fresh
+rugged RUGGED + non-author spec/quality PASS; the parent accepted it as `f4ef6de`.
+M4 then connected the accepted engine to Win32 and passed 36 Node/141 Rust checks
+and Windows cross-build. Those are NOT actual Windows/WSL delivery results.
 
-### Accepted aggregate path and candidate controller design
+### Accepted aggregate path and native wiring
 
-The additive attention engine is host-testable; connecting it to the Win32 shell
-is a separate integration task. The legacy `SessionMonitor::poll` and default
-six-field probe remain unchanged. The aggregate probe uses the synchronous
-`AttentionMonitor`; the planned GUI would instead use candidate `AttentionWorkers`, subject to
-M3 acceptance. That planned delta adds isolated polling, notifications and a session list; it
-does not describe the existing MVP GUI.
+The legacy `SessionMonitor::poll` and default six-field probe remain unchanged.
+The aggregate probe uses synchronous `AttentionMonitor`; current Win32 wiring
+uses `AttentionWorkers` through the same `AttentionRuntime::cycle` dispatcher
+exercised by the continuous M5 demo. The GUI has isolated polling, native NIF_INFO
+requests and an attention-first persistent list. Explorer re-add retains the
+same worker/controller ownership. Submission is not proof of OS display.
+The offline driver is a narrow binary reusing that dispatcher, not a second
+parser/policy implementation; two concurrent runtime-loaded pi publishers stay
+alive until every journey observation is acknowledged. Separate OCI exercises
+only the release CLI probe; no host SDK/config is mounted into it.
 
 `AttentionWorkers::new` validates immutable configured sources and allocates exactly
 one owned worker per source (maximum 16). Each worker reuses an independent M2
@@ -274,7 +281,7 @@ The boundary is the parser, not the display layer:
   success, repository, active directory. Sensitive fields are never named in any struct, so they
   cannot be held even transiently in the program's model.
 - The legacy `tray-goblin-probe` serializes through its own six-field `ProbeSnapshot`;
-  `--all-sessions` uses the separate [aggregate allow-list](operator/privacy.md#aggregate-probecore-metadata).
+  `--all-sessions` uses the separate [aggregate allow-list](operator/privacy.md#aggregate-trayprobe-metadata).
 - GUI action and startup errors are typed enums whose `Display` text names the action and the missing
   prerequisite only — never a path, a session identifier, or an operating-system message.
   Probe config I/O errors can include OS text; see [Privacy](operator/privacy.md).

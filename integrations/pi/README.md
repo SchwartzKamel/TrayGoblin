@@ -8,10 +8,25 @@ Try it without modifying configuration:
 pi --extension /absolute/path/to/integrations/pi/tray-goblin.js
 ```
 
-For a persistent opt-in installation, `pi install /absolute/path/to/integrations/pi`
-adds this local package to pi's personal settings. Remove it with
-`pi remove /absolute/path/to/integrations/pi`. Reload/restart pi after changing
-extensions. The integration does not edit settings itself.
+For persistent opt-in, use the INSTALLED package, not the extracted ZIP or a
+throwaway checkout. The TrayGoblin installer persists this folder and its own
+README below `%LOCALAPPDATA%\Programs\TrayGoblin\integrations\pi`:
+
+```powershell
+$tg = Join-Path $env:LOCALAPPDATA 'Programs\TrayGoblin'
+pi install "$tg\integrations\pi"
+# Before uninstalling TrayGoblin:
+pi remove "$tg\integrations\pi"
+```
+
+These are explicit user commands: pi itself saves/removes the local declaration.
+TrayGoblin never silently edits pi settings. Local packages are referenced, not
+copied by pi. Reload/restart pi after installation/removal, BEFORE deleting the
+package path. Removing the extracted ZIP folder after TrayGoblin installation is
+safe. Inside WSL copy this shipped folder to `$HOME/.local/share/traygoblin/pi`,
+then `pi install "$HOME/.local/share/traygoblin/pi"`; remove with the SAME path.
+Keep that Linux copy updated manually; do not point WSL pi at a transient Windows
+Downloads folder. The installed `resources/SETUP.md` gives complete Windows/WSL setup.
 
 On native Windows and WSL the default status directory is
 `~/.traygoblin/pi` in that pi process's home. Set `TRAY_GOBLIN_STATUS_DIR` before
@@ -20,8 +35,9 @@ directory). Each process/session lifetime publishes a randomly named
 `<instanceId>.json`; consumers must ignore `.tmp` files. Configure a WSL consumer
 source explicitly, e.g. `\\wsl.localhost\Ubuntu\home\operator\.traygoblin\pi`.
 UNC reads may wake/keep WSL running; this publisher makes no no-wake guarantee.
-The Windows tray consumes these sources through independent workers; release
-packaging and real Windows/WSL delivery validation remain separate plan tasks.
+The Windows tray consumes these sources through independent workers. Packaging
+includes this integration/resources; compilation and the offline journey do NOT
+prove real Windows/WSL delivery or resource budgets (M6 remains blocked).
 
 ## Same-repository terminal labels
 
@@ -132,14 +148,66 @@ modifying the same file between ownership check and filesystem operation.
 Forced process termination can leave stale `.json`/`.tmp` files; no global sweep
 or deletion of other instances is attempted.
 
+## Offline gate prerequisites
+
+For Agent validation on Linux/WSL, Node >=22.19 and the actual npm package
+`@earendil-works/pi-coding-agent@1.4.0` are required, not just a `pi` executable.
+**Online provisioning is a SEPARATELY authorized operator prerequisite**, never a
+test or offline-gate step. Only if separately authorized and these public
+prerequisites are missing:
+
+```bash
+npm install --global --ignore-scripts @earendil-works/pi-coding-agent@1.4.0
+podman pull docker.io/library/debian:bookworm-slim
+```
+
+Do NOT run those commands as validation. With the already installed package and
+cached image, check offline BEFORE isolating HOME (no model calls):
+
+```bash
+(
+  set -euo pipefail
+  export PI_CODING_AGENT_PACKAGE="$(npm root -g)/@earendil-works/pi-coding-agent"
+  node -e 'const p=require(process.env.PI_CODING_AGENT_PACKAGE+"/package.json"); require("node:assert/strict").equal(p.name,"@earendil-works/pi-coding-agent"); require("node:assert/strict").equal(p.version,"1.4.0"); console.log(p.name,p.version)'
+  check_home=$(mktemp -d)
+  trap 'rm -rf "$check_home"' EXIT
+  ( cd "$check_home"
+    HOME="$check_home" USERPROFILE="$check_home" PI_CODING_AGENT_DIR="$check_home/agent" \
+      PI_OFFLINE=1 PI_SKIP_VERSION_CHECK=1 PI_TELEMETRY=0 \
+      node "$PI_CODING_AGENT_PACKAGE/dist/cli.js" --help
+  )
+  podman image exists docker.io/library/debian:bookworm-slim
+  podman image inspect docker.io/library/debian:bookworm-slim --format '{{.Id}}'
+  podman info --format '{{.Store.GraphRoot}} {{.Store.RunRoot}}'
+)
+```
+
+Tests default to `../lib/node_modules/@earendil-works/pi-coding-agent` relative to
+`process.execPath`'s directory. If npm uses another prefix, export the checked
+absolute `PI_CODING_AGENT_PACKAGE` directory in the gate's calling shell; it is a
+TrayGoblin test override, not a pi CLI option. Verify the manifest AND real CLI
+help rather than network-installing as a test.
+
+Record the actual public GraphRoot/RunRoot above before isolation; export them as
+`TRAY_GOBLIN_PODMAN_ROOT` / `TRAY_GOBLIN_PODMAN_RUNROOT` in the gate's calling shell.
+An isolated HOME otherwise selects an empty engine store, even when the image is
+cached. These explicit paths select public image storage only: no credential or
+user-config mounts. The gate uses image-exists and `--pull=never`, network-none,
+read-only CLI execution; it fails if the cache/engine is unavailable. It never
+runs online provisioning.
+
 ## Offline validation
 
 ```sh
 node --test tests/pi-status.test.mjs tests/pi-host.test.mjs
 ```
 
-Run from the repository root with pi 1.4.0 installed beside the Node installation,
-or set `PI_CODING_AGENT_PACKAGE` to its package directory. The host test creates an
+This development command requires a source checkout, not just the portable ZIP.
+Run from the repository root with the actual npm
+`@earendil-works/pi-coding-agent@1.4.0` package beside Node, or set
+`PI_CODING_AGENT_PACKAGE` to its absolute package directory (not the executable).
+Use the [prerequisite recipe above](#offline-gate-prerequisites) for provisioning
+and offline checks, separate from validation. The host test creates an
 isolated HOME/agent directory and runtime-loads this exact extension using pi's
 loader and `ExtensionRunner`. Synthetic delayed/resolved/rejected/nested UI goes
 through the runner's real UI wrapper. Lifecycle/outcome events are driven offline.
@@ -163,3 +231,10 @@ Blocked-I/O tests send more than 32 lifecycle updates, assert the exact retained
 bound/overflow diagnostic, recover latest state by heartbeat, and close at capacity.
 This is not model-service, interactive terminal, Windows notification, or WSL
 field evidence. No user configuration, conversation, or auth data is needed.
+The continuous `bash scripts/demo-attention.sh --container podman` installs the
+actual archive into an isolated root, removes extraction, then keeps two actual
+pi runtimes alive in the SAME synthetic directory with different manual labels.
+Their real atomic files traverse the shipped Rust worker/parser/controller and
+AttentionRuntime dispatcher, with nonempty adapter requests and restoration/
+quiet/dedupe assertions. Separate OCI evidence runs only the release CLI probe
+nonroot/network-none/read-only in cached Debian. Neither is Windows evidence.

@@ -44,21 +44,22 @@ The default probe has exactly six output fields: `state`, `model`, `repository`,
 `active_directory`, `last_turn_duration_ms`, and `attention_reason`. This is the legacy snapshot,
 not an inventory of the aggregate attention model.
 
-## Aggregate probe/core metadata
+## Aggregate tray/probe metadata
 
-With explicit `--all-sessions`, the allow-list is separate:
+The current tray and explicit `--all-sessions` probe use this separate allow-list:
 
 | Scope | Modeled/output metadata |
 |---|---|
 | Source | Configured `id`, `label`, `kind`, `path`, optional `wsl_distro`; `capabilities.input_detection` and `session_errors` |
-| Session | `session_id`, `instance_id`, `model`, `directory`, `state`, `attention` (`id`, `reason`, `notify`), `run_started_at_ms`, `last_run_duration_ms` |
+| Session | `session_id`, optional manual `label`, `instance_id`, `model`, `directory`, `state`, `attention` (`id`, `reason`, `notify`), `run_started_at_ms`, `last_run_duration_ms` |
 | Health | `unavailable_pi_statuses` and fixed `diagnostics` codes |
 
 The pi v1 reader additionally validates publication version/provider, episode and publication
-timestamp. Membership identities, publisher freshness deadlines and candidate-controller delivery
-bookkeeping are internal, not extra JSON fields. See [Configuration](configuration.md) for the
-explicit loading example and limits. Aggregate metadata is not evidence of attention GUI
-integration; M3 remains [blocked/unaccepted](../architecture.md#m3-blocked-checkpoint).
+timestamp and optional explicit manual label. Membership identities, publisher
+freshness deadlines and controller delivery bookkeeping are internal, not extra
+JSON fields. See [Configuration](configuration.md) for explicit probe loading and
+limits. Native wiring is accepted at implementation/compilation tier; actual
+Windows/WSL delivery and resource evidence remains blocked M6.
 
 ## Where data goes
 
@@ -68,7 +69,8 @@ integration; M3 remains [blocked/unaccepted](../architecture.md#m3-blocked-check
 - **No observed session data is persisted by the tray/probe.** The only file the GUI writes is your own
   `%APPDATA%\TrayGoblin\config.json`, and only when you choose **Open settings** and the file does
   not exist yet. The separate opt-in [pi publisher](../../integrations/pi/README.md) writes its
-  content-free status files; it is not tray/probe persistence or a shipped attention GUI.
+  content-free status files; it is not tray/probe persistence. The installer persists
+  integration code/README/resources below its root, without changing pi settings.
 - **All access is read-only.** Copilot's session files are opened for reading; TrayGoblin never
   writes, moves, truncates, or deletes them, and never changes Copilot CLI configuration or
   telemetry settings.
@@ -95,8 +97,9 @@ review probe output before sharing it.
 
 ## What is visible on screen
 
-The tooltip can show a model name, a repository name, an active directory path, and a turn
-duration. If you share your screen, treat the directory and repository lines as you would your
+The tooltip/menu/notification can show provider/source, optional manual label,
+session/instance IDs, model, directory and available timing. The legacy probe
+also includes repository metadata. If you share your screen, treat the directory and repository lines as you would your
 editor's title bar. There is no way for prompt or response text to appear there.
 
 ## Confirming it yourself

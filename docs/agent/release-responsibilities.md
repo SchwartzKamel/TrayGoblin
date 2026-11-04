@@ -24,6 +24,12 @@ Who does what for a TrayGoblin release. The step-by-step commands are in
 
 ## Gates
 
+Version0.1.0 is unpublished. The active attention plan (`.wgm/IMPLEMENTATION_PLAN.md`),
+not the historical root MVP completion record, is the sole authority for the current
+candidate, exact gate results, review/audit verdicts and next acceptance action.
+M1–M4 are accepted at implementation/compilation tier. M5 is in_progress/unaccepted
+pending actual disposition; M6 actual Windows/WSL and resource evidence is BLOCKED.
+No author is authorized to tag/push/publish.
 A release advances only when the preceding gate is green.
 
 1. **Behaviour gate** — the deterministic suite and the cross-build pass. Nothing is tagged before
@@ -34,8 +40,9 @@ A release advances only when the preceding gate is green.
    publication requires this.
 4. **Performance gate** — `scripts/measure-performance.ps1` passes on Windows 10 or 11 within the
    50 MB working-set and 5% CPU budgets. **A preview build must not be promoted to stable until
-   this measurement passes.** A preview may ship with the measurement outstanding only if the
-   release notes say so explicitly.
+   this measurement passes.** For the attention follow-up, M6 field AND resource
+   evidence must pass before ANY publication is considered; the historical MVP
+   preview exception does not waive this blocker.
 
 ## What is deterministic and what is not
 
@@ -61,9 +68,10 @@ project. Validation and release are local, scripted, and reproducible. Adding a 
 
 - The tag and the commit SHA it points at
 - The archive SHA-256
-- The Windows version used for verification, plus the working-set and CPU numbers — or an explicit
-  statement that the performance gate is still outstanding
-- Known limitations: Windows x86-64 only, per-user installation, no code signing, no auto-update
+- Windows+WSL versions, real per-case observations/timings and working-set/CPU
+  numbers for the SAME executable SHA256/build identity/PID/path; no inferred results
+- Known limitations: Windows x86-64 only, per-user install, unsigned, no auto-update,
+  Copilot input unavailable, UNC may wake WSL, notifications may be suppressed
 
 ## Withdrawal
 

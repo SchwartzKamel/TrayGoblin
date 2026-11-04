@@ -25,19 +25,21 @@ other sources.
 
 ## Give same-repository terminals a manual label
 
-Load the opt-in pi extension with a different label in each terminal. Example
-paths assume a checkout at `C:\src\TrayGoblin` or `/home/operator/TrayGoblin`:
+Load the opt-in pi extension with a different label in each terminal. Prefer
+persistent installed resources; the extracted archive may be deleted afterward:
 
 ```powershell
 # Native Windows PowerShell, before starting pi:
 $env:TRAY_GOBLIN_LABEL = 'review'
-pi --extension C:\src\TrayGoblin\integrations\pi\tray-goblin.js
+$tg = Join-Path $env:LOCALAPPDATA 'Programs\TrayGoblin'
+pi --extension "$tg\integrations\pi\tray-goblin.js"
 # Another terminal can use 'build', even in the same working directory.
 ```
 
 ```sh
 # Inside WSL (not a Windows path):
-TRAY_GOBLIN_LABEL=build pi --extension /home/operator/TrayGoblin/integrations/pi/tray-goblin.js
+# First copy the shipped integration to this durable WSL path (see setup):
+TRAY_GOBLIN_LABEL=build pi --extension "$HOME/.local/share/traygoblin/pi/tray-goblin.js"
 ```
 
 For WSL, explicitly add a pi source such as
@@ -45,7 +47,10 @@ For WSL, explicitly add a pi source such as
 configuration. The default status folder belongs to the home of the process
 running pi, not to the Windows consumer. `TRAY_GOBLIN_STATUS_DIR` can override it.
 See the [pi integration](../../integrations/pi/README.md) for persistent opt-in
-installation/removal. TrayGoblin never changes pi settings automatically.
+installation/removal and installed `resources/SETUP.md` for the durable WSL copy.
+TrayGoblin never changes pi settings automatically. Use `pi install` on the
+installed package for explicit persistent opt-in; remove the SAME declaration
+and reload pi before uninstalling TrayGoblin.
 
 Labels are optional user-supplied metadata: at most 64 UTF-8 bytes after control
 removal/truncation, then trimmed; blank means unlabeled. They are not pi's automatic

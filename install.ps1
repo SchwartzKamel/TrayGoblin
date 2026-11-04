@@ -50,6 +50,11 @@ $script:ShortcutName = 'TrayGoblin.lnk'
 $script:InstallMarkerName = '.tray-goblin-install'
 $script:InstallMarkerContent = 'TrayGoblin per-user installation'
 $script:OptionalPayload = @('uninstall.ps1', 'install.ps1', 'LICENSE', 'README.txt')
+$script:ResourcePayload = @(
+    'integrations/pi/tray-goblin.js', 'integrations/pi/package.json', 'integrations/pi/README.md',
+    'resources/SETUP.md', 'resources/config.example.json', 'resources/build.json',
+    'resources/test-attention-windows.ps1', 'resources/measure-performance.ps1'
+)
 
 function Write-Step {
     param([Parameter(Mandatory)][string] $Message)
@@ -176,7 +181,7 @@ function New-StartupShortcut {
         $shortcut = $shell.CreateShortcut($ShortcutPath)
         $shortcut.TargetPath = $TargetPath
         $shortcut.WorkingDirectory = $WorkingDirectory
-        $shortcut.Description = "$script:ApplicationName - Copilot CLI status in the notification area"
+        $shortcut.Description = "$script:ApplicationName - local pi/Copilot session attention"
         $shortcut.WindowStyle = 1
         $shortcut.Save()
     } catch {
@@ -200,6 +205,15 @@ $sourceExecutable = Join-Path $SourcePath $script:ExecutableName
 if (-not (Test-Path -LiteralPath $sourceExecutable -PathType Leaf)) {
     Stop-InstallScript -Message "`"$script:ExecutableName`" was not found in `"$SourcePath`"." `
         -Remedy 'Run install.ps1 from the folder produced by extracting the release ZIP.'
+}
+
+# Validate the complete persistent payload BEFORE creating an ownership marker.
+# The installer never registers this extension in pi settings on the user's behalf.
+foreach ($relative in $script:ResourcePayload) {
+    if (-not (Test-Path -LiteralPath (Join-Path $SourcePath $relative) -PathType Leaf)) {
+        Stop-InstallScript -Message "release resource `"$relative`" is missing." `
+            -Remedy 'Extract the complete release ZIP, then retry.'
+    }
 }
 
 $InstallRoot = [System.IO.Path]::GetFullPath((Resolve-InstallRoot -Requested $InstallRoot))
@@ -275,7 +289,30 @@ foreach ($name in $script:OptionalPayload) {
     }
 }
 
-Write-Step "Installed `"$script:ExecutableName`"."
+# Copy only the allow-listed resources, below the marked install root. Refuse
+# reparse points so a repair cannot redirect new nested writes outside that root.
+foreach ($relative in $script:ResourcePayload) {
+    $destination = Join-Path $InstallRoot $relative
+    $parent = Split-Path -Parent $destination
+    $cursor = $destination
+    while ($cursor -and $cursor -ne $InstallRoot) {
+        if ((Test-Path -LiteralPath $cursor) -and
+            ((Get-Item -LiteralPath $cursor -Force).Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
+            Stop-InstallScript -Message 'an installation resource path is a reparse point; no resource was copied through it.' `
+                -Remedy 'Remove the redirected path after checking its ownership, then retry.'
+        }
+        $cursor = Split-Path -Parent $cursor
+    }
+    try {
+        New-Item -ItemType Directory -Path $parent -Force | Out-Null
+        Copy-Item -LiteralPath (Join-Path $SourcePath $relative) -Destination $destination -Force
+    } catch {
+        Stop-InstallScript -Message "resource `"$relative`" could not be copied; the repair marker was kept." `
+            -Remedy 'Check access and retry installation.'
+    }
+}
+
+Write-Step "Installed `"$script:ExecutableName`" and persistent pi/resources. Pi settings were not changed."
 
 $shortcutPath = $null
 if ($NoStartup) {

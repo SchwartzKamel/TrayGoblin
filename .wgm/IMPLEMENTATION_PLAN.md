@@ -1,114 +1,197 @@
 # Session attention implementation plan
 
-Full track · Ralph-full, fresh author/reviewer contexts · one task per iteration.
-Root AGENTS.md and specs/CONSTITUTION.md govern; never edit existing AGENTS.md.
-This follow-up governs `.wgm/specs/session-attention.md`; root plan is MVP history.
+Full track · Ralph-full · fresh one-task authors/non-author reviewers.
+Root AGENTS.md and specs/CONSTITUTION.md govern; NEVER edit root AGENTS.md.
+Active spec/glossary: `.wgm/specs/session-attention.md`, `.wgm/specs/CONTEXT.md`.
+Root plan/specs remain historical MVP authority. This is the live follow-up state.
 
-## Current state — 2026-11-04 UTC
-**M1/M2/M3/M4 accepted; M5 pending; M6 field-blocked.**
-Accepted commits: M1 `0d79111`, M2 `058ef74`, M3 `f4ef6de`, M4 `d94c85c`. WIP `79e9220` preserves prior dissent, not its later
-resolution. Historical recovery evidence remains in that commit and external run
-directory; this compact plan is live state. Native tray wiring is accepted at
-implementation/compilation tier, not proven on a Windows runtime.
+## CURRENT checkpoint — 2026-11-04 UTC
+**M1–M4 ACCEPTED. M5 BLOCKED/unaccepted WIP at bounded-recovery stop.
+M6 BLOCKED/unverified. No release readiness, publication or holistic completion.**
+Accepted commits: M1 `0d79111`, M2 `058ef74`, M3 `f4ef6de`, M4 `d94c85c`.
+M4 score/helper-scope metadata: `aa617e9`. M5 code gates/reviews are green, but
+final qualitative audit retains GREEN Agent A08; it is NOT silently waived.
+Last judged tier1=94.12 (M4); tiers2/3 unopened. No M5 judge or score claimed:
+protocol invokes that fresh validator only AFTER actual task acceptance.
 
-## Approved goal and boundaries
-One Windows tray alerts the operator which pi/Copilot session needs attention
-across native Windows and local WSL. Pi: all explicit blocking dialogs (including
-manual/compaction/settings) and final run errors. Copilot: new persisted errors
-only; passive input detection unavailable. Completion/ordinary Idle/abort/recovered
-tools quiet. Metadata only; optional manual label, no conversation/args/results/
-tokens/credentials. Native notifications + persistent list; no daemon, server,
-dashboard, remote SSH collector, agent control or automatic terminal focus.
-Pi extension and all-dialog/visible-tracking-fault policies have user approval.
+## Goal and boundaries
+One native Windows tray identifies pi/Copilot attention across Windows/local WSL.
+Pi: ALL explicit blocking dialogs including manual, plus final run errors.
+Copilot: new persisted errors only; passive input capability unavailable.
+Ordinary Idle/completion/abort/recovered tool failures quiet. Metadata/manual labels
+only; no prompts/results/args/tokens/credentials/generated names. Native notification
+plus attention-first persistent list. No daemon/server/dashboard/remoteSSH collector,
+automatic terminal focus/control or implicit WSL discovery/launch. Explicit UNC
+reads can wake WSL; removing that source and restarting disables those reads.
 
-## Build/review contract
-- Authors work only one task, do not open either scenario directory, launch
-  reviewers, commit or self-certify done. Parent owns commits and acceptance.
-- Done requires exact gate exit0, current ruggedRUGGED and fresh non-author
-  specPASS+qualityPASS against an immutable candidate. Inspect report content;
-  exit0 only means a report exists. Preserve dissent and checked source hashes.
-- Tests explain transitions; do not skip/delete/weaken existing protection. The
-  explicitly approved all-dialog policy superseded only idle-invisibility/busy
-  inference assertions; ambiguity must assert typed tracking error, not false health.
-- Bug regressions must compile and assertion-fail on the rejected source, pass
-  fixed, then the COMPLETE exact gate passes. Keep raw before/after provenance.
-- Use synthetic fixtures, isolated HOME/XDG and verified public compiler caches;
-  never inspect actual user conversation/auth/config. Format only touched files.
-- Preserve evidence tiers: policy/core, actual offline pi1.4 host, Windows
-  compilation, real Windows/WSL interaction. Never convert one into another.
-- No push/tag/release/upstream publication delegated. Version0.1.0 stays unpublished.
-- External helpers/logs: `/home/lafiamafia/.cache/traygoblin-wgm/attention-20261103`.
-  run-one.sh/check-one.sh/review-one.sh/judge-one.sh supply fresh contexts. Do not
-  edit a helper while it runs. Stage explicit owned paths, not broad baseline
-  diffs/holdouts. Preserve candidate refs and ensure accepted runtime matches review.
-- Current stronger-model escalation: pi/github-copilot/gpt-6.1-sol,xhigh; print,
-  no-session/no-extension/no-MCP context. Prior Copilot diagnostic path-approval
-  denial was setup-only. Authorized primary pi diagnostic established actual proof.
+## Contract
+- One repository writer at a time; authors never stage/commit/review/open holdouts.
+  Parent owns acceptance/commits; validator alone opens holdouts tier1→2→3 at95.
+- Done requires EXACT task gate0 plus current ruggedRUGGED and BOTH fresh non-author
+  PASS at an immutable candidate, and M5's final audit/dispositions. Report/exit0
+  alone is not PASS. Verify actual symbols/files/counts/source+artifact hashes.
+- No product edits during reviews; no edits/builds during guarded audit. Never edit
+  an active shell helper. Preserve reports/refs before retry; clear only stale run
+  exit signals. No reset/stash/history rewrite, broad cleanup or user-file discard.
+- Purpose-commented tests; no weakening/skips/deletions. Bugs assertion-fail on
+  rejected source, pass fixed, then COMPLETE gate0. Separate rejected/fixed targets;
+  contaminated shared-target M3 attempt is retained but excluded. Bounded failure
+  requires wonder/reflect/new signal or safe exact WIP stop, not silent waiver.
+- Synthetic fixtures/isolated HOME/XDG, verified public caches only; no user data,
+  credentials or model/network calls in tests. Format only touched files.
+- Core, actual offline pi1.4 host, OCI CLI, Windows compilation and actual Windows
+  operation are DISTINCT. No Linux/mock substitute for M6. No publication delegated.
+- External evidence root (RUN): `/home/lafiamafia/.cache/traygoblin-wgm/attention-20261103`.
+  Authors: fresh pi/github-copilot/gpt-6.1-sol xhigh via bundled loop/no stored
+  session/extensions/MCP. Reviews/audits: fresh CopilotCLI contexts/lenses, model
+  family unqueried. No cross-family/tooling-independence/billing/speedup claim.
 
 ## Tasks
 
 ### M1 — Publish real pi attention status
-- **objective:** Content-free publisher proven through actual installed pi loader/runner.
+- **objective:** Content-free publisher through actual installed pi loader/runner.
 - **files/areas:** `integrations/pi/`, `tests/pi-{status,host}.test.mjs`, `scripts/test-pi-host.mjs`.
 - **validation:** `node --test tests/pi-status.test.mjs tests/pi-host.test.mjs`
-- **acceptance:** R1–R3.16KiB scalar protocol; independent lifecycle state/dialog overlay; original error ID restored; ambiguous ID-less hooks latch one ui_tracking_unavailable episode until reload. Nullable attentionReason distinguishes run_error;2s coalesced heartbeat,32 pending writes+reserved close, atomic ownership-aware shutdown; privacy traps.
+- **acceptance:** R1–R3.16KiB scalar protocol; independent lifecycle/dialog overlay,
+  same restored error ID; ambiguous ID-less hooks latch one actionable tracking
+  fault until reload.2s heartbeat,32 pending writes+reserved close, atomic ownership
+  cleanup/privacy traps. No sensitive modeled fields or idle/busy inference.
 - **status:** done
-- **evidence:** Commit0d79111 matches reviewed runtime c41f964;33/33 tests (25 core,8 actual offline pi1.4 host). Fresh ruggedRUGGED/specPASS/qualityPASS. Before-fail/after-pass and cap/close mutants retained under M1.R4; current verdict `.wgm/rugged/M1-current.md`. Spec-metadata reservation preserved in prior plan; final commit includes corrections, code byte-identical. Tier1 intermediate84.58, consumer/demo then absent. No live Windows proof.
+- **evidence:** Commit0d79111/runtimec41f964;33/33 (25 core,8 actual offline host),
+  ruggedRUGGED/specPASS/qualityPASS. RUN/M1.R4 before/after/cap-close mutants;
+  historical policy/metadata reservations retained, explicitly superseded by approved
+  all-dialog/latched-fault policy. M4 adds optional manual labels/stronger privacy.
 
 ### M2 — Concurrent content-free sources and aggregate probe
-- **objective:** Independent pi/Copilot state, bounded parsing/config and legacy compatibility.
+- **objective:** Independent bounded pi/Copilot state/config and legacy compatibility.
 - **files/areas:** `src/{config,monitor,events,attention,lib}.rs`, `src/bin/tray-goblin-probe.rs`, `tests/attention_monitor.rs`, `tests/fixtures/attention/`, `docs/operator/configuration.md`.
 - **validation:** `cargo test --workspace`
-- **acceptance:** R4–R5,R7 parsing,R9.16 sources,64 live rows/source,4096 scan/membership bound,16KiB+1 pi reads,10s heartbeat expiry; UUID regular files only, no symlink escape. Stale files do not consume live capacity. Native defaults, legacy sessionRoot override, explicit sources replace defaults/empty disables. New --all-sessions; old six-field probe unchanged. New persisted Copilot error only; no historical/tool-only alert. UNC can wake WSL; explicit paths, no distro launch/discovery. Restored pi error ID may decrease; freshness is not episode direction.
+- **acceptance:** R4–R5,R7 parsing,R9.16 sources,64 live rows/source,4096 membership,
+ 16KiB+1 pi reads/10s expiry; UUID regular files/no symlink escape. Stale residue
+  cannot consume live capacity; explicit sources replace defaults/empty disables;
+  historical/tool-only Copilot errors quiet. Old probe exactly SIX fields.
 - **status:** done
-- **evidence:** Commit058ef74;93 tests, same actual publisher→parser/probe boundary, read-cap/directory-pinning mutants. RuggedRUGGED + fresh spec/qualityPASS; Source saturation regression fixed M2.R1. Direct publisher/core integration is not a new pi-host or Windows field result. No blocking reservations.
+- **evidence:** Commit058ef74;Rust93,ruggedRUGGED/specPASS/qualityPASS; publisher→
+  parser/probe and read-cap/directory-pinning/saturation controls RUN/M2.R1.
+  No blocking reservations; core evidence is not Windows field evidence.
 
 ### M3 — Controller, source isolation and stable provenance
-- **objective:** Low-noise bounded delivery and nonblocking source workers, with identity/time provenance surviving recovery.
-- **files/areas:** `src/{attention,attention_worker,monitor,lib}.rs`, `tests/{attention_controller,attention_monitor}.rs`, `docs/architecture.md`, `docs/operator/configuration.md` for episode semantics.
+- **objective:** Bounded low-noise delivery/fixed workers with recovery-safe identities.
+- **files/areas:** `src/{attention,attention_worker,monitor,lib}.rs`, `tests/{attention_controller,attention_monitor}.rs`, `docs/architecture.md`, `docs/operator/configuration.md`.
 - **validation:** `cargo test --test attention_monitor --test attention_controller && cargo test --workspace`
-- **acceptance:** R6–R7. Distinct identities; no replay of acknowledged/same restored error; preserve exhausted budgets. One coalesced request/tick;3 attempts/episode >=5s apart; success-only acknowledgement; explicit Refresh rearm of undelivered only.16 fixed owned workers, bounded command/latest slots, no UI I/O/join/replacement threads. Controlled drain/stop<250ms, other-source progress<1s,10 stall cycles/no growth, late/stale results rejected. Publisher-derived expiry survives blocked reads; parse clock sampled after actual read. Typed membership/completeness, not display projection, governs removals;4096 retained identities/source × at most4 reason slots, visible overflow instead of silent eviction.64 mixed real-parser/worker/controller stress; fresh/clear<=2P+500ms, stale<=10s+2P. M1 byte-identical.
+- **acceptance:** R6–R7. Coalesce/tick,3 attempts >=5s apart from completion,
+  success-only ack/Refresh undelivered-only;16 fixed owned workers/bounded slots,
+  no UI I/O/join/replacement. Drain/stop<250ms, other progress<1s,10 stalls/no growth,
+  actual-time expiry. Checked non-recycling process-lifetime Copilot IDs; known
+  parser retention by typed COMPLETE membership, never selected rows; source/partial
+  loss preserves all budgets.64 parsers/4096 histories/source/<=4 reason slots,
+  visible overflow; mixed64 stress. M1 lifecycle/queue/privacy unchanged.
 - **status:** done
-- **acceptance record (2026-11-04 UTC):** Exact isolated-HOME gate exited0:52 targeted/136 workspace,0 failed/ignored. Runtime/test/docs match immutable e1221e2b77d8ea9bc453151505c7b0288f09d770; fresh ruggedRUGGED, non-author specPASS and qualityPASS, no blocking reservations. Parent verified source-equivalence/symbols and authoritative counts. Actual rejected/fixed before-after evidence: R4 new-error collision20/20 fails/20 passes; R4.1 pending/exhausted/ack partial-scan regressions20/20 failures then20 passes; full34-controller suite10/10 passes. Global checked IDs, bounded membership-governed parser retention/admission and explicit diagnostics preserve old delivery and fresh independent budgets without changing controller/worker policy. M1 bytes unchanged. Review identities: fresh CopilotCLI contexts (model family unqueried), stronger author pi/gpt-6.1-sol xhigh; context/lens independence, not claimed cross-family advantage. Raw M3.{validation,rugged,spec,quality,judge}.log, M3.R4/M3.R4.1 evidence; current verdict `.wgm/rugged/M3-current.md`.
-- **intermediate satisfaction:** Fresh independent tier1 score93.37, no tier2/3 opened; dominant missing-continuous-demo (two real-host publishers feeding consumer in one journey). Existing core64-session behavior is proven; M5 owes continuous shipped-host→Rust demo. Incomplete integration evidence, not a remaining M3 defect. Exactly one task advanced: M3.
-- **Historical R4 implementer handoff (superseded):** Narrow repair implemented in `src/monitor.rs`: checked process-lifetime atomic Copilot IDs plus retention of the existing bounded parser cache through temporary source loss. `src/attention.rs` adds only the content-free exhaustion diagnostic; controller/worker policy and `src/events.rs` are unchanged. Added seven real file→monitor→worker→controller recovery controls, one multiple-monitor/source test, and allocator/cache-pruning unit tests. Existing regressions remain; only accidental literal Copilot counter-start assertions now check positive/distinct/stable provenance. M1 publisher/Node paths are byte-identical.
-- **Historical R4 exact evidence / then-pending gates (superseded):** External `M3.R4/` contains candidate source/compiled-artifact digests, commands/logs/exits and retained test binaries. Final regression compiles against exact `e193b6c49d66500083977d98eb0e6d71b1bb56e9` and assertion-fails20/20 (exit101,0/1 passed); fixed passes20/20. Full31-test controller suite passes10/10. Use SEPARATE `rejected-target`/`fixed-target`: one shared-target recheck incorrectly reused the fixed rlib; that invalid setup result is preserved/labeled, excluded from proof. Initial and final post-repeat complete exact gates exit0:49 targeted (31+18),132 workspace (67+31+18+16), no ignored tests. Final exact gate is recorded in `exact-gate-final.{command,log,exit}`; parent must inspect it and `REPORT.md`, then freeze a candidate and run fresh rugged/spec/quality/holdout roles. M3 is NOT accepted/done; M4/M5 untouched, M6 still field-blocked. No staging/commit/dispatch or target-host proof.
-- **Resolved R4.1 correction / prior dissent:** R4 exact49 targeted/132 workspace and fresh ruggedRUGGED/specPASS bind `edec9fabb3dc6e6393b34fe9b4f83c29b7b14bd9`, BUT latest external qualityCHANGES-REQUESTED traced incomplete session-lock scans discarding known parser provenance. This author first added three synthetic file→real monitor→same owned worker→controller controls: first submission actually fails, all three submissions exhaust, and acknowledged unchanged error stays quiet. Real lock/log bytes and file identity stay unchanged. Exact edec9fa compiles and assertion-fails all three before production edits;20/20 rejected repeats reproduce lost retries/Refresh and historical reclassification. This confirms the formerly source-traced finding, not a new scope/design.
-- **M3.R4.1 implementation / bounded recovery:** `src/monitor.rs` now prunes parsers by typed `SourceMembership` only after complete absence, before admitting candidates. Incomplete scans retain known provenance; positive lock replacement still rebuilds quietly. At64 retained parsers/source, refused new candidates get `Unavailable` plus existing `session_overflow`; no eviction, unbounded growth or silent health. A new real-files unit control covers ten churn generations, blocked admission, unchanged recovery/replacement at capacity, and complete recovery reclaiming absent entries/admitting new ones. Checked process-lifetime IDs, root-loss retention, `src/events.rs`, controller/worker policy and M1 publisher/Node paths are unchanged. Only monitor, controller tests, architecture and these notes are authored.
-- **Historical R4.1 author evidence / then-pending gates:** External `/home/lafiamafia/.cache/traygoblin-wgm/attention-20261103/M3.R4.1/` holds exact commands/logs/exits, candidate/source hashes, isolated rejected-source copy and SEPARATE rejected-target/fixed-target artifacts. New regressions pass20/20 fixed repeats; full34-test controller suite passes10/10; cache-cap/reclaim control passes. Post-repeat COMPLETE exact isolated-HOME gate exits0 (`exact-gate-final.{command,log,exit}`):52 targeted (34+18),136 workspace (68+34+18+16),0 ignored. Source and separately compiled/retained rlib/test-binary digests plus accepted-M1 byte checks are in `final-provenance.json`; exact resume is `REPORT.md`. M3 remains in_progress; parent freezes candidate and runs fresh independent rugged/spec/quality roles plus holdout judging. M1/M2 stay accepted, M4/M5 pending, M6 real Windows field-blocked. No staging, commits, reviewer dispatch, user runtime/config access, publication or Windows/WSL/OCI/service proof.
-- **proven R4 baseline defect / design — historical trigger:** A fresh stronger read-only diagnostic has PROVEN the remaining e193b6c49d66500083977d98eb0e6d71b1bb56e9 defect through compiled real library/owned workers/controller: acknowledged error1, same lock/instance, unavailable root clears parser cache, log truncates, observed empty recovery baseline, NEW error visibly notify=true reuses1 and is suppressed, even after Refresh.0/1 assertion-failed,20/20 repeats; three controls pass.23 selected source/manifest/test/asset files matched candidate before/after; no repository writes. Evidence `M3.R4-diagnostic/{REPORT.md,FIX-DESIGN.md,results.txt}` and exact logs/commands. This supersedes the earlier diagnostician's permission-blocked attempt, not its retained history.
-- **authorized narrow repair:** Allocate checked, non-recycling process-lifetime Copilot error IDs outside volatile parser/session/monitor state. Preserve bounded known parser/provenance through temporary source loss while returning explicitly unavailable snapshots; unchanged known errors keep identity, pending/exhausted budgets and quiet acknowledgement. Retain true removal/lock replacement cleanup, quiet historical reset and new-event eligibility. Never fix collision by forgetting controller acknowledgement, always rearming Refresh, inventing lock IDs, using clock/filelength/truncated hashes, or adding a DB. Theoretical allocator exhaustion must degrade visibly, never wrap. Pi episode allocation/restoration unchanged.
-- **required signal:** Add actual monitor→workers→controller regression `copilot_new_error_after_source_cache_loss`; compile/assertion-fail on e193b6c, pass fixed. Keep unchanged-acknowledged, historical replacement and normal truncation controls; add pending/exhausted/new-budget, obsolete-ack, reconstruction/multiple-monitor controls. Process-wide IDs need not start1 per test/session; replace only accidental literal-start assertions with stronger positive/distinct/stable provenance assertions, never weaken identity/delivery protection. Exact M3 full gate remains mandatory plus repeats; no raw provider body/new sensitive fields.
-- **prior evidence / dissent:** WIP79e9220 exact41 targeted/122 workspace and ruggedRUGGED/qualityPASS, BUT specCHANGES-REQUESTED; not accepted. Earlier R1 fixed expiry, R2 time/placeholder identity, R3 capacity-membership loss with assertion-fail counterexamples and repeats. All code/history preserved under M3.R0–R3 and commit79e9220. Replan is based on actual new compiled proof and stronger model, not a fourth blind patch loop. Parent must rerun all candidate-bound reviews after correction.
+- **evidence:** Commitf4ef6de matches e1221e2b77d8ea9bc453151505c7b0288f09d770;
+  exact52 targeted/136 workspace,0 ignored,ruggedRUGGED/specPASS/qualityPASS.
+  RUN/M3.R4 new-error20fails/20passes; R4.1 partial-scan controls20fails/20passes,
+  full34 suite10/10. Current `.wgm/rugged/M3-current.md`. Tier1=93.37 lacked M5
+  continuous demo, NOT an M3 defect. No blocking reservations.
 
-### M4 — Native Windows notifications and usable session identity
-- **objective:** Connect tested workers/controller to existing Win32 tray/balloons/menu.
-- **files/areas:** `Cargo.toml` (existing windows-sys feature flags only), `src/{tray,app,actions,icon,attention,attention_worker,monitor}.rs`, `tests/{attention_controller,attention_monitor}.rs`, `integrations/pi/{tray-goblin.js,README.md}`, `tests/pi-{status,host}.test.mjs`, `scripts/test-pi-host.mjs`, `docs/operator/{status-reference,first-run}.md`.
+### M4 — Native Windows notifications and usable identity
+- **objective:** Connect tested workers/controller to existing native tray/balloons/menu.
+- **files/areas:** `Cargo.toml` (existing windows-sys flags only), `src/{tray,app,actions,icon,attention,attention_worker,monitor}.rs`, `tests/{attention_controller,attention_monitor}.rs`, `integrations/pi/{tray-goblin.js,README.md}`, `tests/pi-{status,host}.test.mjs`, `scripts/test-pi-host.mjs`, `docs/operator/{status-reference,first-run}.md`.
 - **validation:** `node --test tests/pi-status.test.mjs tests/pi-host.test.mjs && cargo test --workspace && cargo build --release --target x86_64-pc-windows-gnu --bin tray-goblin`
-- **acceptance:** R8 implementation tier. UI drains workers without filesystem I/O; bounded content-free NIF_INFO, attention-first persistent list/counts/tooltip; explicit capabilities/diagnostics and success-only submission. Explorer re-add doesn't reset acknowledgements; preserve actions. Optional bounded TRAY_GOBLIN_LABEL through publisher/parser/display gives human per-terminal identity, no prompt-derived naming. Test unlabeled compatibility/labels and document Windows/WSL launch examples. No M4 while M3 unaccepted; compilation/policy is NOT target delivery proof.
+- **acceptance:** R8 implementation tier. UI requests/drains/stops only; epoch
+  freshness/controller/actual completion separate from uptime cadence. Engine/ack
+  survives Explorer; bounded UTF16 NIF_INFO/tooltip/menu, persistent attention-first
+  identity/capabilities/diagnostics/safe actions. Optional64UTF8-byte manual labels,
+  unlabeled v1 compatibility/native singleton. No native-delivery claim.
 - **status:** done
-- **acceptance record (2026-11-04 UTC):** Exact isolated-HOME gate exit0:36 Node (26 core/10 actual offline pi1.4 host),141 Rust (68 library+38 controller+19 aggregate+16 legacy),0 skipped/ignored; Windows release cross-build and PE32+ x86-64 GUI/import checks PASS. Immutable candidate `5894cd119b80fc47bace1f36002574cc38248828`: fresh ruggedRUGGED, non-author specPASS+qualityPASS. Parent verified actual wiring, labels, runner counts and candidate/worktree source equality; reviewers verified22/22 source and7/7 artifact hashes. Fresh CopilotCLI review contexts/lenses (model family unqueried), stronger pi/gpt-6.1-sol xhigh author; no cross-family/tooling claim.
-- **implementation:** `AttentionRuntime::cycle` owns fixed workers/controller across Explorer; UI only requests/drains/stops, never source I/O/join. Epoch clocks remain separate from uptime, including actual adapter-completion timestamp. Native NIF_INFO, UTF16-safe bounded text, attention-first persistent menus/counts/capabilities/diagnostics; optional64-byte explicit manual labels through actual pi host→parser→display. Unmapped POSIX actions fail safely; Copilot logs never select pi; native singleton retained.
-- **evidence/reservations:** External `M4.{validation,rugged,spec,quality}.log`, `M4.author/REPORT.md` and `final-provenance.json`; current verdict `.wgm/rugged/M4-current.md`. Four driver controls20/20 and full38 suite5/5; three separately compiled dispatch/clock/ack mutants assertion-fail, privacy mutation hits both strengthened getter controls. Early setup/new-test failures and wonder/reflect remain preserved externally. Spec reservations:none within M4 tier. Quality reservation: actual Windows/WSL delivery/suppression/recovery/resources remain unverified M6, not waived. Exact executable SHA256 `f8acac734ebf670cec55017a952664ff0dcb12a362659ea2a17c1503a56f3602`. No Windows runtime or release-readiness claim. Fresh validator tier1=94.12 (steps87.67/94.67/94/96.25/98); tiers2/3 unopened. Diagnostic `continuous-demo-missing`: segmented evidence, not an M4 defect. Independently executed10 file-free controls and legacy/aggregate fixture probes, verified7 artifact digests; exact commands in external `M4.judge.log`. M5 owes continuous two-real-host→Rust demo.
+- **evidence:** Commitd94c85c matches5894cd119b80fc47bace1f36002574cc38248828;
+  Node36 (26 core/10 actual host),Rust141 (68+38+19+16),0 skipped/ignored,
+  Windows PE32+ x86-64 GUI/import checks; ruggedRUGGED/specPASS/qualityPASS.
+  Four driver controls20/20/full38 suite5/5; separately compiled dispatch/clock/ack
+  mutants assertion-fail; privacy mutant hits real poisoned getters. Actual
+  `AttentionRuntime::cycle`, epoch completion, NIF_INFO and safe actions verified.
+  RUN/M4.author/REPORT.md and current `.wgm/rugged/M4-current.md`.
+  Spec reservations:none within tier; quality retains unverified M6 boundary.
+  Fresh judge tier1=94.12 (87.67/94.67/94/96.25/98),10 independent file-free controls
+  plus fixture CLI; `continuous-demo-missing`, tiers2/3 unopened. RUN/M4.judge.log.
 
-### M5 — Package, document and run offline attention demo
-- **objective:** Installable artifact and actual shipped publisher→Rust end-to-end demo with complete setup.
-- **files/areas:** `scripts/{demo-attention.sh,demo-attention-host.mjs,test-release-docs.mjs,test-attention-windows.ps1,package-release.sh,check-docs.sh,measure-performance.ps1,test-installer.ps1,test-pi-host.mjs}`, `src/bin/tray-goblin-attention-demo.rs`, `scripts/demo.sh` (package allowlist coupling only; preserve MVP assertions), `install.ps1`, `uninstall.ps1`, `integrations/pi/`, `assets/` for packaged operator resources, `README.md`, `docs/`, `.wgm/docs/audit/`, `.wgm/deferred-work.md`. Extra helpers explicitly authorized and check-one.sh stage allowlist updated before M5 authoring; no omitted module at freeze.
+### M5 — Package, documentation and offline attention demo
+- **objective:** Installable unpublished artifact, continuous actual-host→Rust demo/setup.
+- **files/areas:** `scripts/{demo-attention.sh,demo-attention-host.mjs,test-release-docs.mjs,test-attention-windows.ps1,package-release.sh,check-docs.sh,measure-performance.ps1,test-installer.ps1,test-pi-host.mjs}`, `src/bin/tray-goblin-attention-demo.rs`, `scripts/demo.sh` (package allowlist only), `install.ps1`, `uninstall.ps1`, `integrations/pi/`, `assets/`, `README.md`, `docs/`, `.wgm/docs/audit/`, `.wgm/deferred-work.md`. Extra helpers declared/allowlisted BEFORE freeze.
 - **validation:** `bash scripts/demo-attention.sh --container podman && bash scripts/demo.sh 0.1.0 && bash scripts/check-docs.sh`
-- **acceptance:** R9–R10. Exact package allow-list includes persistent pi integration/resources; never silently edits pi settings. Real shipped extension→Rust demo verifies identity/privacy/quiet completion/dedupe; Windows cross-build/package and preserved MVP demo/checksum. OCI CLI-only: nonroot,network-none,read-only executable+fixtures, existing Debian bookworm-slim, assert real JSON. Clear Windows/WSL config, labels, install/remove, limitations, UNC wake, unavailable/clock/tracking faults and notification suppression. Windows field script rejects Linux and collects real observations; performance Path binds PID/path/hash and rejects mismatch. Resolve checkpoint audit Agent findings (including annotated tag must peel ^{commit}, no published-status falsehood, correct public CLI examples) and run final independent five-role docs audit/structural check. Preserve dissent; no structural COMPLETE relabeled GREEN. Add any tightly coupled helper filename to explicit area/allowlist before authoring/freezing.
-- **status:** pending
+- **acceptance:** R9–R10. Exact package allowlist/checksum/persistent resources,
+  no silent pi settings edits. TWO concurrent installed pi1.4 publishers in same
+  directory→shipped Rust parser/workers/controller/actual submit. Identity/privacy,
+  heartbeat/dialogs/errors/restoration/dedupe/quiet completion; old MVP unchanged.
+  OCI separate cached bookworm-slim/nonroot/network-none/read-only binary+fixtures,
+  real JSON/cleanup. Windows collectors reject Linux, bind cadence/PID/path/digest.
+  Indexed accurate setup/limitations/UNC/suppression docs; final qualitative audit.
+- **status:** blocked
+- **CURRENT exact evidence:** Candidate4e5e3c1f3106e4f958fc9af15afd9cdc707dd794;
+  gate0, fresh scoped ruggedRUGGED/specPASS/qualityPASS after full R3 reviews at
+  b0b244f. All nine delta paths inspected; runtime/control/package trees unchanged.
+  RUN/M5.validation.* and M5.parent-gate-R4/:14 actual-host phases/5 adapter requests,
+  zero sensitive/network/busy reads; separate restricted OCI JSON/absence.
+  Rust141/0 ignored; installer56pass/0fail/1 Windows-only shortcut SKIP;
+  Windows cross-build/package, exact MVP/allowlist/checksum/two-pack; docs408/0 skipped.
+ 12 Bash+2 PowerShell canonical fences+4 audit fences,44 injected failures/run,
+  success/canary controls including actual ZIP; old-source behavioral failures
+  retained. No fresh M5 standalone Node36 run claimed. No M5 holdout score.
+- **Proof/provenance:** RUN/M5.{finalize,cadence-fix,docs-fix,status-fix}/REPORT.md;
+  M5.author/REPORT.md is absent (first author timed out), not fabricated.
+  Status-fix artifact manifest actually has12 entries, docs-fix6: parent rechecked
+  all12; prior review13-count claim is a preserved measurement disagreement, NOT
+  a missing artifact. Three14-digest journeys/artifact hashes verified. ZIP
+  `9485a19ea81fa03763a11dcf8802132389db9b215d72a31d80ccd0a3e3f5e1a5`;
+  PE `f8acac734ebf670cec55017a952664ff0dcb12a362659ea2a17c1503a56f3602`.
+  Manifest honestly says pre-freezeaa617e98/dirty/unpublished; no official release.
+- **CURRENT audit/blocker:** `.wgm/docs/audit/2026-11-04T0508Z_attention-final-disposition.md`
+  is AMBER. Four fresh personas+writer verified original A01–A07 closed, but
+  GREEN Agent A08 survives: operative plan NEXT still requested already-completed
+  freeze/reviews. Structural --check-report0 BEFORE indexing is not qualitative
+  GREEN or acceptance. O01 protected root/O02 genuine field proof remain separate.
+  No code correctness finding survives; required independent metadata closure does.
+- **Stop/remediation:** Bounded wonder/reflect/regeneration rounds exhausted;
+  do NOT extend another blind loop or waive A08. This coordinator checkpoint makes
+  STOP/current next-action explicit but is NOT independent closure of A08. One
+  precise next authorization: fresh metadata-only author verifies/aligns operative
+  NEXT to the authoritative checkpoint, preserves dated history, reruns exact gate;
+  fresh scoped non-author review and five-role audit close A08 before M5 done.
+  External prompt RUN/M5.A08.plan-fix.prompt. Then parent accepts/commits and ONLY
+  THEN runs judge-one.sh M5; tier1>=95 before2, then3. No new product feature work.
 
 ### M6 — Real Windows/WSL field and resource evidence
-- **objective:** Verify actual delivery/recovery and50MB/5% budget before release readiness.
+- **objective:** Actual delivery/recovery and50MB/5% budget before release readiness.
 - **files/areas:** `scripts/test-attention-windows.ps1`, `scripts/measure-performance.ps1`, `.wgm/rugged/`, this plan.
 - **validation:** `pwsh -NoProfile -File scripts/test-attention-windows.ps1 -ExecutablePath target/x86_64-pc-windows-gnu/release/tray-goblin.exe -EvidencePath .wgm/windows-attention.json && pwsh -NoProfile -File scripts/measure-performance.ps1 -Path target/x86_64-pc-windows-gnu/release/tray-goblin.exe -DurationSeconds 30 -JsonPath .wgm/windows-performance.json`
-- **acceptance:** R11–R12. Real native+WSL pi dialogs/errors/Copilot errors; quiet completion3P; attention/clear deadlines; dedupe,Focus Assist/menu,pi reload/crash,Explorer no replay,WSL shutdown/native isolation/actual UNC wake and recovery,source removal,clean quit. Record UTC/buildSHA/executableSHA256/PID/path/Windows+WSL versions/source kinds/load and genuine observations. Performance report matches candidate digest. No Linux/mock substitute.
+- **acceptance:** R11–R12. Genuine native+WSL dialogs/errors/Copilot, quiet3P,
+  deadlines/dedupe/suppression/list/reload/crash/Explorer no replay, WSL shutdown/
+  native isolation/actual UNC wake/recovery/removal/quit. Real UTC/buildSHA/executable
+  digest/PID/path/Windows+WSL versions/source kinds/load/observations; matching
+  performance digest. Native installation/Startup/process safety also unverified.
 - **status:** blocked
-- **reason:** No actual Windows/WSL host available here. Operator action after M5; no promotion/publication until genuine evidence.
+- **reason:** No actual Windows/WSL runtime. Operator action; no promotion/publication
+  until genuine field+performance proof. Linux/mock/syntax/compilation cannot satisfy.
 
-## Artifacts and gates
-- Goal/glossary/spec/constitution consistent; R1–R3→M1,R4–R5→M2,R6–R7→M3,R8→M4,R9–R10→M5,R11–R12→M6. Validator-only tier1→2→3 scenarios in `.wgm/scenarios/`, convergence95. Intermediate scores are not completion or root MVP regressions.
-- Full baseline audit `.wgm/docs/audit/2026-11-03T2148Z_attention-baseline.md` completed; checkpoint `.wgm/docs/audit/2026-11-04T0114Z_attention-wip-checkpoint.md` is RED, with coupled corrections/deferred Agent actions recorded in its index and `.wgm/deferred-work.md`. M5 owes final audit and remaining release-doc corrections; never waive RED as structural pass.
-- Current M1/M2/M3/M4 implementation verdicts are RUGGED with both correctness passes; prior e193 FRAGILE/static-proof history is superseded by compiled regressions and accepted e1221e2. M3 regenerated plan had RUGGED/readiness98 before stronger author work. No implementation gate was waived.
-- Latest accepted gates: M1 Node33, M2 Rust93, M3 Rust136/targeted52, M4 Node36/Rust141/Windows cross-build; last docs381. Progress4 accepted, not complete. Current tier1=94.12; M5 owns continuous-demo evidence, tiers2/3 stay gated until95.
-- M4 author/check/review/validator children exited. M4 runtime matches pinned5894cd1 after acceptance metadata commit. Authorize one fresh M5 author via external M5.strong-author.prompt and pi-author-one.sh; final audit runs only after M5 exact gate green. Do not edit an active helper. M6 stays blocked; no actual Windows/release claim.
+## History, dissent and operative NEXT
+All earlier current-looking handoffs are SUPERSEDED by this checkpoint. Full
+pre-stop plan retained RUN/M5.plan-before-stop.md and reviewed candidate4e5e3c1.
+No tracked history/runtime scratch was deleted; raw reports/refs remain.
+- M3 WIP79e9220/e193b6c and plans5122dbd/20a4995 preserve earlier spec dissent despite
+  green122 tests; edec9fa preserves later partial-membership quality dissent/132.
+  Stronger compiled R4/R4.1 fixes received accepted136; no inference approach reopened.
+- M5 R0 timeout1800s preserved RUN/M5.R0/. Empty wrapper and isolated-HOME cache
+  failure explicitly excluded; public cached image restored with no pull.
+- Rejected25df263: both reviewers CHANGES-REQUESTED on cadence aliases/default.
+ 33 actual AST controls compile/execute; rejected24 behavior failures include all
+  three pinned mismatches; separate fixed56/0/1 and COMPLETE gate0. Ref
+  refs/wgm/candidates/M5-before-cadence-fix; RUN/M5.R1-rejected/, M5.cadence-fix/.
+- RED0405 audit: genuine A01–A06 repaired by fresh author; actual rejected101442e
+  source/ZIP fences execute and assertion-fail on fail-through, not syntax/missing
+  markers. Full fresh R3 reviews atb0b244f. Ref M5-before-docs-fix; RUN/M5.docs-fix/.
+- AMBER0442: A01–A05 closed; A06/A07 author corrected, fresh R4 scoped reviews at
+  4e5e3c1; current AMBER0508 verifies those closed but A08 remains. Reports immutable;
+  severity/execution/count dissent preserved, including denied principal replay,
+  no verbatim online provisioning claim, and12-versus13 manifest normalization.
+- **OPERATIVE NEXT:** STOP, no live author/reviewer/audit writer. M5 is unaccepted;
+  obtain only the fresh metadata validation/closure above, not another runtime
+  implementation round. Four tasks accepted; no done count decreases. M6 blocked.
