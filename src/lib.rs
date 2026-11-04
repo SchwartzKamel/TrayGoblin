@@ -1,5 +1,6 @@
 pub mod actions;
 pub mod app;
+pub mod attention;
 pub mod config;
 pub mod events;
 pub mod icon;

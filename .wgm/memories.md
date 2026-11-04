@@ -1,0 +1,18 @@
+# WGM memories
+
+- 2026-07-28: Copilot CLI 1.0.76 exposes content-free state boundaries in local `events.jsonl`: `assistant.turn_start`, `assistant.turn_end`, `session.model_change`, and tool execution success. Read only selected fields; do not model event content.
+- 2026-07-28: A tray-only native Rust process is the practical path to the stated sub-50 MB target; Electron or a Node sidecar would make that budget speculative.
+- 2026-07-28: JSONL polling must advance offsets only through complete newline-terminated records; otherwise a partial append is classified once and skipped forever.
+- 2026-07-28: Reset a session's derived state and cached offset together when selection changes, or reactivating a previously selected session can falsely appear Idle.
+- 2026-07-28: A GUI-subsystem Windows tray app must surface startup failures with native UI; stderr is invisible from Explorer and Startup shortcuts.
+- 2026-07-28: Win32 timer schedules should advance from the prior due time, not message-delivery time, or latency jitter can suppress the next expected poll.
+- 2026-07-28: Destructive uninstallers need an installer-owned marker, but the marker must be written before payload copy and deleted last so interrupted install/uninstall operations remain recoverable.
+- 2026-07-28: Per-user installers must scope process termination by executable path; process-name matching can target other users or portable copies.
+- 2026-07-28: Documentation in this repository uses two explicit audiences: Operators run the product; Agents change and release it. Shared references name both.
+- 2026-07-28: Reproducible packaging claims apply to a given executable; normalized ZIP metadata does not make independently compiled binaries byte-identical.
+- 2026-07-28: Shell-based JSON allow-list checks must capture every quoted key, not only identifier-shaped keys, or unexpected fields with digits or punctuation can disappear from validation.
+- 2026-11-03: CLI tool approval and out-of-workspace path approval are separate. A headless implementer needs explicit narrow directory grants for installed host SDK/docs and run evidence; missing permission is setup evidence, not a product bug.
+- 2026-11-03: A host's generic idle/busy predicate may include compaction or other non-agent operations. Verify its implementation before using it as active-run identity; reconstructing hidden lifecycle state from a broader boolean can strand status or clear errors falsely.
+- 2026-11-03: Awaited extension handlers plus independently emitted UI start/end events can deliver end before start to a later observer. Test earlier asynchronous observers through the actual host dispatcher, not only delayed filesystem writes or manually ordered event calls.
+- 2026-11-03: Current follow-up plan is .wgm/IMPLEMENTATION_PLAN.md. M1 accepted:33 tests, actual offline pi1.4 host, ruggedRUGGED + fresh spec/qualityPASS. All explicit dialogs overlay independent state; ambiguous ID-less ordering latches ui_tracking_unavailable until reload, never signed-debt healthy guessing. Episode IDs restore old underlying error identities; do not use their direction as freshness. Pending-write cap32 reserves one close barrier. M2–M5 remain; GUI still MVP until integration.
+- 2026-11-04: M2 accepted at candidate b324533:93 tests, ruggedRUGGED/specPASS/qualityPASS. Apply live-session caps AFTER freshness validation: crash residue must not hide current attention. Bounded4096-entry scan, unavailable summaries, no consumer deletion; regression fails on33ad6ece. Tier1 remains84.50 because M3 notification dedupe/M5 demo are unbuilt, not publisher defects. Next M3; M6 still field-blocked.

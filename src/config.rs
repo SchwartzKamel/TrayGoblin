@@ -1,6 +1,6 @@
 use std::{fmt, path::PathBuf, time::Duration};
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 /// Lower bound of the accepted polling interval, in milliseconds.
 pub const MIN_POLL_INTERVAL_MS: u64 = 500;
@@ -8,10 +8,58 @@ pub const MIN_POLL_INTERVAL_MS: u64 = 500;
 pub const MAX_POLL_INTERVAL_MS: u64 = 10_000;
 /// Default polling interval used when none is configured.
 pub const DEFAULT_POLL_INTERVAL_MS: u64 = 1_000;
+pub const MAX_SOURCES: usize = 16;
+
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, Eq, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum Provider {
+    Copilot,
+    Pi,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
+pub struct Source {
+    pub id: String,
+    pub label: String,
+    pub kind: Provider,
+    pub path: PathBuf,
+    #[serde(default)]
+    pub wsl_distro: Option<String>,
+    #[serde(skip)]
+    pub(crate) implicit: bool,
+}
+
+pub fn validate_sources(sources: &[Source]) -> Result<(), ConfigError> {
+    if sources.len() > MAX_SOURCES {
+        return Err(ConfigError::InvalidSources);
+    }
+    let mut ids = std::collections::HashSet::new();
+    for source in sources {
+        if !valid_text(&source.id, 128)
+            || !valid_text(&source.label, 128)
+            || source.path.as_os_str().is_empty()
+            || !valid_text(&source.path.to_string_lossy(), 4096)
+            || source
+                .wsl_distro
+                .as_ref()
+                .is_some_and(|s| !valid_text(s, 128))
+            || !ids.insert(&source.id)
+        {
+            return Err(ConfigError::InvalidSources);
+        }
+    }
+    Ok(())
+}
+
+fn valid_text(value: &str, max: usize) -> bool {
+    !value.trim().is_empty() && value.len() <= max && !value.chars().any(char::is_control)
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ConfigError {
     PollIntervalOutOfRange(u64),
+    InvalidSources,
+    HomeUnavailable,
 }
 
 impl fmt::Display for ConfigError {
@@ -21,18 +69,22 @@ impl fmt::Display for ConfigError {
                 f,
                 "poll interval {value}ms is outside the accepted {MIN_POLL_INTERVAL_MS}-{MAX_POLL_INTERVAL_MS}ms range"
             ),
+            Self::InvalidSources => f.write_str(
+                "sources must have unique bounded IDs, labels and paths, with at most 16 entries",
+            ),
+            Self::HomeUnavailable => f.write_str("no home directory available for default sources"),
         }
     }
 }
 
 impl std::error::Error for ConfigError {}
 
-/// Content-free monitor configuration: only a session-root override and a
-/// bounded polling cadence. Never carries prompt, credential, or token data.
+/// Content-free sources and polling cadence, retaining legacy root aliases.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MonitorConfig {
     session_root: Option<PathBuf>,
     poll_interval_ms: u64,
+    sources: Option<Vec<Source>>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -41,6 +93,8 @@ struct MonitorConfigDocument {
     session_root: Option<PathBuf>,
     #[serde(default, alias = "pollIntervalMs")]
     poll_interval_ms: Option<u64>,
+    #[serde(default)]
+    sources: Option<Vec<Source>>,
 }
 
 impl Default for MonitorConfig {
@@ -48,6 +102,7 @@ impl Default for MonitorConfig {
         Self {
             session_root: None,
             poll_interval_ms: DEFAULT_POLL_INTERVAL_MS,
+            sources: None,
         }
     }
 }
@@ -62,6 +117,7 @@ impl MonitorConfig {
         Ok(Self {
             session_root,
             poll_interval_ms,
+            sources: None,
         })
     }
 
@@ -76,7 +132,48 @@ impl MonitorConfig {
             .poll_interval_ms
             .unwrap_or(DEFAULT_POLL_INTERVAL_MS);
 
-        Self::new(document.session_root, poll_interval_ms).map_err(ConfigParseError::Invalid)
+        let mut config = Self::new(document.session_root, poll_interval_ms)
+            .map_err(ConfigParseError::Invalid)?;
+        if let Some(sources) = &document.sources {
+            validate_sources(sources).map_err(ConfigParseError::Invalid)?;
+        }
+        config.sources = document.sources;
+        Ok(config)
+    }
+
+    pub fn sources(&self) -> Option<&[Source]> {
+        self.sources.as_deref()
+    }
+
+    pub fn resolved_sources(&self) -> Result<Vec<Source>, ConfigError> {
+        if let Some(sources) = &self.sources {
+            return Ok(sources.clone());
+        }
+        let home = std::env::var_os("USERPROFILE")
+            .or_else(|| std::env::var_os("HOME"))
+            .map(PathBuf::from)
+            .ok_or(ConfigError::HomeUnavailable)?;
+        Ok(vec![
+            Source {
+                id: "native-copilot".into(),
+                label: "Native Copilot".into(),
+                kind: Provider::Copilot,
+                path: self
+                    .session_root
+                    .clone()
+                    .unwrap_or_else(|| home.join(".copilot/session-state")),
+                wsl_distro: None,
+                implicit: true,
+            },
+            Source {
+                id: "native-pi".into(),
+                label: "Native pi".into(),
+                kind: Provider::Pi,
+                path: home.join(".traygoblin/pi"),
+                wsl_distro: None,
+                implicit: true,
+            },
+        ])
     }
 
     pub fn session_root(&self) -> Option<&PathBuf> {

@@ -1,0 +1,17 @@
+# Satisfaction trajectory
+
+| Iteration | Tier | Score | Note | Dominant diagnostic |
+|---|---:|---:|---|---|
+| T1 | 1 | 0 | Baseline: the probe and live-session fixture are owned by pending T2-T3; no regression. Tier 2 not opened. | `missing_bin_target` |
+| T2 | 1 | 16.7 | Parser and privacy boundaries are deterministic; the probe and live-session fixture remain owned by T3. Tier 2 not opened. | `missing_bin_target` |
+| T3 | 1 | 100 | Gate green (`cargo test --lib && cargo test --test monitor`, 31/31). `active-turn-magic-moment` fully satisfied: probe reports working+model+repository on turn_start, idle+2000ms on turn_end, zero sensitive fields across both runs. Tier 1 converges; tier 2 opened. | none |
+| T3 | 2 | 70 | `degraded-session-state` step 2 (sentinel absent) scores 100, but step 1 scores ~40: probe exits 0 and stays content-free, but reports `idle`/`attention_reason:null` where the scenario expects an attention-needed status, because `apply_event` unconditionally clears `turn_failed` on any `assistant.turn_end` regardless of that event's own `success` value, and the committed degraded fixture's failed tool call is followed by a `turn_end`. Scenario score 70 (min-strictness 40) is below the 90 floor; tier 2 does not converge. | `attention-clears-on-turn-end` |
+| T3 corrective | 1 | 100 | Exact gate green with 32 tests; the active-turn fixture reports Working, then Idle with a 2,000 ms duration, through the content-free probe. | none |
+| T3 corrective | 2 | 100 | The degraded fixture exits 0, reports Attention needed with `tool_failed`, and emits no sensitive fixture sentinel. | none |
+| T4 | 1 | 100 | Tray-facing state mapping, tooltip, timer, refresh, and actions are deterministic; the active-turn probe remains converged. | none |
+| T4 | 2 | 100 | The degraded content-free probe remains converged; Windows interaction is an explicit manual residual, not a deterministic regression. | none |
+| TZ | 1 | 100 | The end-to-end demo re-ran the active-turn journey, exact probe allow-list, workspace tests, and Windows PE verification. | none |
+| TZ | 2 | 100 | The degraded journey, reproducible package, packaged executable identity, exact entries, and checksum all converged. | none |
+| M1 historical pre-policy | 1 | 71.67 | Initial three-step follow-up judgment, before final correctness dissent and all-dialog/visible-fault policy. Historical only; not directly comparable to revised five-step scenario or root MVP scores. | `consumer-boundary-missing` |
+| M1 accepted | 1 | 84.58 | Revised five-step `pi-attention-radar`; independent validator reran33 real-offline-host/core tests. Steps76.67/65/97.5/83.75/100. Publisher accepted by rugged/spec/quality gates; consumer, dedupe and concurrent Working-host demo still pending M2–M5. Tier2/3 not opened. Separate follow-up baseline, not a root MVP regression. | `missing-consumer-evidence` |
+| M2 accepted | 1 | 84.50 | Fresh validator, candidate b324533; steps85/65/97.5/75/100. Supplied Rust93/M1-host33 execution plus independent legacy CLI. Aggregate probes approval-denied, not credited. Missing M3 dedupe and M5 concurrent-host/demo are explicit pending integration; score variation is not a substantiated runtime regression. Tiers2/3 unopened. | `notification-dedupe` |

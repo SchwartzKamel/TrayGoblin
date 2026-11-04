@@ -9,22 +9,25 @@ use std::{path::PathBuf, process::ExitCode};
 use serde::Serialize;
 use tray_goblin::{
     config::{ConfigParseError, MonitorConfig, default_session_root},
-    monitor::SessionMonitor,
+    monitor::{AttentionMonitor, SessionMonitor},
     status::{AttentionReason, StatusSnapshot, StatusState},
 };
 
 struct Args {
     session_root: Option<PathBuf>,
     config_path: Option<PathBuf>,
+    all_sessions: bool,
 }
 
 fn parse_args() -> Result<Args, String> {
     let mut session_root = None;
     let mut config_path = None;
+    let mut all_sessions = false;
     let mut raw_args = std::env::args().skip(1);
 
     while let Some(arg) = raw_args.next() {
         match arg.as_str() {
+            "--all-sessions" => all_sessions = true,
             "--session-root" => {
                 let value = raw_args
                     .next()
@@ -44,6 +47,7 @@ fn parse_args() -> Result<Args, String> {
     Ok(Args {
         session_root,
         config_path,
+        all_sessions,
     })
 }
 
@@ -93,6 +97,33 @@ fn run() -> Result<(), String> {
         }
         None => MonitorConfig::default(),
     };
+
+    if args.all_sessions {
+        let mut sources = config
+            .resolved_sources()
+            .map_err(|error| error.to_string())?;
+        if let Some(root) = args.session_root {
+            if config.sources().is_some() {
+                return Err(
+                    "--session-root cannot override explicit sources with --all-sessions".into(),
+                );
+            }
+            if let Some(source) = sources
+                .iter_mut()
+                .find(|s| s.kind == tray_goblin::config::Provider::Copilot)
+            {
+                source.path = root;
+            }
+        }
+        let mut monitor = AttentionMonitor::new(sources).map_err(|error| error.to_string())?;
+        let snapshot = monitor
+            .poll()
+            .map_err(|_| "system clock precedes Unix epoch".to_owned())?;
+        let json = serde_json::to_string_pretty(&snapshot)
+            .map_err(|_| "failed to encode aggregate snapshot".to_owned())?;
+        println!("{json}");
+        return Ok(());
+    }
 
     let session_root = args
         .session_root

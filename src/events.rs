@@ -8,6 +8,7 @@ pub enum EventKind {
     ModelChange,
     AssistantMessage,
     ToolExecutionComplete,
+    SessionError,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -72,6 +73,7 @@ pub fn parse_event_line(line: &str) -> ParsedEvent {
         "session.model_change" => EventKind::ModelChange,
         "assistant.message" => EventKind::AssistantMessage,
         "tool.execution_complete" => EventKind::ToolExecutionComplete,
+        "session.error" => EventKind::SessionError,
         _ => return ParsedEvent::Unsupported,
     };
 

@@ -32,9 +32,96 @@ The file is optional. When it does not exist, TrayGoblin uses the defaults below
 |---|---|---|---|
 | `pollIntervalMs` | number | `1000` | How often Copilot session state is polled, in milliseconds. Accepted range is 500–10,000. |
 | `sessionRoot` | string or `null` | `null` | Overrides the Copilot session folder. When `null`, `%USERPROFILE%\.copilot\session-state` is used. |
+| `sources` | array | omitted | Replaces the aggregate attention sources; see below. Currently used by the aggregate probe/core, not the legacy tray. |
 
 `poll_interval_ms` and `session_root` are accepted as alternative spellings of the same two keys.
 Any other key is ignored, so a configuration file written by a future version stays usable.
+
+## Aggregate attention sources (probe/core)
+
+The aggregate path is available through `tray-goblin-probe --all-sessions`.
+Native tray integration is a subsequent implementation task; the existing GUI
+and default probe retain their original single-session behavior for now.
+Without `--all-sessions`, the probe still emits exactly its original six fields.
+
+Missing/legacy configuration supplies two aggregate sources: native Copilot at
+`%USERPROFILE%\.copilot\session-state` and pi at
+`%USERPROFILE%\.traygoblin\pi` (`$HOME` on development hosts). `sessionRoot`
+overrides only the implicit Copilot source. A missing implicit pi directory is
+normal when its opt-in publisher is not installed. An explicit `sources` array
+replaces **both** defaults; `sources: []` disables aggregate monitoring.
+
+```json
+{
+  "pollIntervalMs": 1000,
+  "sources": [
+    {
+      "id": "windows-copilot",
+      "label": "Windows Copilot",
+      "kind": "copilot",
+      "path": "C:/Users/operator/.copilot/session-state"
+    },
+    {
+      "id": "ubuntu-pi",
+      "label": "Ubuntu pi",
+      "kind": "pi",
+      "path": "\\\\wsl.localhost\\Ubuntu\\home\\operator\\.traygoblin\\pi",
+      "wsl_distro": "Ubuntu"
+    }
+  ]
+}
+```
+
+Sources require unique nonempty IDs and labels (at most 128 UTF-8 bytes), a
+nonempty path (at most 4096 bytes), and kind `pi` or `copilot`. Optional
+`wsl_distro` is a nonempty attribution label (128 bytes), **not** discovery or a
+launch command. Control characters are rejected. At most 16 sources are allowed.
+Unknown kinds, duplicate IDs and invalid bounds fail configuration explicitly.
+`--session-root` may override the implicit Copilot root with `--all-sessions`;
+combining it with explicit `sources` is an error. The legacy probe still uses
+`sessionRoot`/`--session-root` independently of aggregate source selection.
+
+Only configured roots are polled; no WSL distro or arbitrary home discovery is
+performed. Accessing a configured UNC path **may start or keep WSL running**.
+Remove that source and restart the application to stop those reads. Source
+configuration is immutable until restart.
+
+Aggregate JSON contains `sources`, each with source identity/configuration,
+`capabilities`, `sessions`, and fixed content-free `diagnostics`. Copilot input
+detection is **unavailable** (`input_detection: false`), never guessed from timeouts.
+All active Copilot lock-directories have independent offsets, state and identity.
+Historical `session.error` records remain visible but have `attention.notify:
+false`; only newly appended errors qualify for alerts. Tool failures alone do
+not qualify. A new `assistant.turn_start` clears an error, not Idle or turn end.
+
+Pi consumes the [published v1 protocol](../../integrations/pi/README.md).
+Only regular `<UUID>.json` files are opened, never temporary files or symlinks.
+Reads stop at 16 KiB plus one overflow-detection byte. A heartbeat more than
+10 seconds old, any future timestamp, a regressed publication timestamp,
+malformed/partial data or a mismatched instance filename yields Unavailable and
+a diagnostic, not inferred input. An exactly 10-second-old heartbeat is fresh.
+Restored older error episode IDs are accepted; episode numbers are not freshness
+counters. UI tracking faults remain distinctly labeled `ui_tracking_unavailable`.
+Directory handles anchor reads during a poll (Linux uses `/proc/self/fd`;
+Windows holds directories against rename and rejects reparse points). Descendant
+symlinks cannot redirect reads outside the configured root.
+
+Each source exposes at most 64 session instances and examines at most 4096
+directory entries per poll. Pi validates freshness before applying the live-session
+quota: unavailable publications never displace live attention within that scan.
+`unavailable_pi_statuses` counts unavailable regular UUID publications examined
+(zero for Copilot); their fixed diagnostics summarize residue even when there is
+no spare session-list capacity. Unavailable placeholders occupy only spare slots.
+Pi retains at most 64 timestamps and 64 temporary residue names, validates at most
+4096 files per poll, and never deletes publisher files. Per-file reads retain the
+16 KiB plus one byte limit; only one file is read at a time. Overflow of the scan
+or session list is visible, not a guarantee of coverage beyond the scan limit. Copilot
+reads at most 256 KiB of appended events per session per poll, retries incomplete
+JSONL records, diagnoses/discards overlong records in bounded chunks, and ignores
+unknown events/fields. Large historical logs may need multiple polls to initialize,
+without replaying historical attention. Source polling here is synchronous:
+worker isolation and notification delivery are separate tasks, not claims made
+by the aggregate probe.
 
 ## Examples
 
