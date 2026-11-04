@@ -6,13 +6,15 @@ Active spec/glossary: `.wgm/specs/session-attention.md`, `.wgm/specs/CONTEXT.md`
 Root plan/specs remain historical MVP authority. This is the live follow-up state.
 
 ## CURRENT checkpoint — 2026-11-04 UTC
-**M1–M4 ACCEPTED. M5 BLOCKED/unaccepted WIP at bounded-recovery stop.
-M6 BLOCKED/unverified. No release readiness, publication or holistic completion.**
+**M1–M5 ACCEPTED at implementation tier. M6 BLOCKED/unverified.**
+**Ready for real Windows/WSL testing, NOT a published or release-ready build.**
 Accepted commits: M1 `0d79111`, M2 `058ef74`, M3 `f4ef6de`, M4 `d94c85c`.
-M4 score/helper-scope metadata: `aa617e9`. M5 code gates/reviews are green, but
-final qualitative audit retains GREEN Agent A08; it is NOT silently waived.
-Last judged tier1=94.12 (M4); tiers2/3 unopened. No M5 judge or score claimed:
-protocol invokes that fresh validator only AFTER actual task acceptance.
+M4 score/helper-scope metadata: `aa617e9`. M5 product matches reviewed4e5e3c1;
+all code gates/RUGGED/specPASS/qualityPASS stand. Final full-fleet audit0508 plus
+fresh five-role A08 closure0535 leave NO surviving Agent action in scope; AMBER
+O01 protected-root authorization/O02 genuine target-host evidence remain explicit.
+Last judged tier1=94.12 (M4); a fresh M5 validator follows this acceptance, then
+only if tier1>=95 may it open tiers2/3. No unrun score is claimed.
 
 ## Goal and boundaries
 One native Windows tray identifies pi/Copilot attention across Windows/local WSL.
@@ -125,7 +127,8 @@ reads can wake WSL; removing that source and restarting disables those reads.
   OCI separate cached bookworm-slim/nonroot/network-none/read-only binary+fixtures,
   real JSON/cleanup. Windows collectors reject Linux, bind cadence/PID/path/digest.
   Indexed accurate setup/limitations/UNC/suppression docs; final qualitative audit.
-- **status:** blocked
+- **status:** done
+- **acceptance record — 2026-11-04 UTC:** Parent accepts M5 after exact full chain exit0, current runtime RUGGED + both fresh non-author product PASS at4e5e3c1, metadata author gate0 with107 source/87 product identity checks, independent scoped specPASS/qualityPASS at5ab2703, and complete four-persona+writer A08 closure report0535. A08 fixed/closed; A01–A07 independently closed; no Agent action survives the bounded delta. Overall docs AMBER is preserved for O01/O02, not relabeled GREEN. Parent verified no runtime/resources/tests/docs-fleet changes against reviewed product and inspected actual reports/counts. Raw scoped reports RUN/M5.A08.{spec,quality,audit}.log; exact gate RUN/M5.A08/gate.exit0. Counts:14 real-host phases/5 adapter requests, restricted OCI CLI JSON/cleanup,141 Rust tests,56 installer passes/one explicit Windows shortcut skip,408 docs checks. Prior standalone Node36 gate is M4 evidence, not invented new M5 execution. No native Windows/WSL/resources proof. Exactly one task advanced, M5; M6 stays blocked.
 - **CURRENT exact evidence:** Candidate4e5e3c1f3106e4f958fc9af15afd9cdc707dd794;
   gate0, fresh scoped ruggedRUGGED/specPASS/qualityPASS after full R3 reviews at
   b0b244f. All nine delta paths inspected; runtime/control/package trees unchanged.
@@ -144,13 +147,15 @@ reads can wake WSL; removing that source and restarting disables those reads.
   `9485a19ea81fa03763a11dcf8802132389db9b215d72a31d80ccd0a3e3f5e1a5`;
   PE `f8acac734ebf670cec55017a952664ff0dcb12a362659ea2a17c1503a56f3602`.
   Manifest honestly says pre-freezeaa617e98/dirty/unpublished; no official release.
-- **CURRENT audit/blocker:** `.wgm/docs/audit/2026-11-04T0508Z_attention-final-disposition.md`
-  is AMBER. Four fresh personas+writer verified original A01–A07 closed, but
-  GREEN Agent A08 survives: operative plan NEXT still requested already-completed
-  freeze/reviews. Structural --check-report0 BEFORE indexing is not qualitative
-  GREEN or acceptance. O01 protected root/O02 genuine field proof remain separate.
-  No code correctness finding survives; required independent metadata closure does.
-- **Stop/remediation:** Bounded wonder/reflect/regeneration rounds exhausted;
+- **CURRENT audit disposition:** Full-fleet0508 AMBER originally retained A08;
+  `.wgm/docs/audit/2026-11-04T0535Z_attention-a08-closure.md` independently verifies
+  A08 FIXED/CLOSED at5ab2703, with no Agent actions surviving. Complete five-role
+  context/lens review; model/tool independence not claimed. Both scoped non-author
+  PASS reports independently verified exact16-line delta and unchanged107/87 maps.
+  Structural --check-report0 was run before indexing; qualitative AMBER remains
+  solely O01 protected root/O02 genuine Windows/WSL/resources evidence. Historical
+  severity/count/execution disagreements are retained, not a waiver.
+- **Stop/remediation history — 2026-11-04 checkpoint15694c3:** Bounded wonder/reflect/regeneration rounds exhausted;
   do NOT extend another blind loop or waive A08. This coordinator checkpoint makes
   STOP/current next-action explicit but is NOT independent closure of A08. One
   precise next authorization: fresh metadata-only author verifies/aligns operative
@@ -192,6 +197,10 @@ No tracked history/runtime scratch was deleted; raw reports/refs remain.
   4e5e3c1; current AMBER0508 verifies those closed but A08 remains. Reports immutable;
   severity/execution/count dissent preserved, including denied principal replay,
   no verbatim online provisioning claim, and12-versus13 manifest normalization.
-- **OPERATIVE NEXT:** STOP, no live author/reviewer/audit writer. M5 is unaccepted;
-  obtain only the fresh metadata validation/closure above, not another runtime
-  implementation round. Four tasks accepted; no done count decreases. M6 blocked.
+- **OPERATIVE NEXT:** Five implementation tasks are accepted; product/metadata
+  reviews and five-role A08 closure are COMPLETE. Parent commits this acceptance
+  and invokes fresh judge-one.sh M5 (tier1>=95 before2, then3), recording actual
+  results rather than an unrun score. Then hand off the artifact for Operator M6:
+  genuine Windows/WSL interaction/recovery/installation/Startup and matching-digest
+  performance. No repeat author/freezing/reviews, new feature round, tag or publication
+  is requested. Protected root AGENTS.md changes still need explicit scoped approval.

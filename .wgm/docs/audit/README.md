@@ -3,12 +3,13 @@
 The [active plan](../../IMPLEMENTATION_PLAN.md) is the sole authority for the
 current candidate, exact gate results, review/audit verdicts and next acceptance
 action. This index preserves dated reports and evidence, not transient review
-status. M5 remains in_progress/unaccepted pending actual disposition; M6 is
-BLOCKED. The implementation is unpublished, not release-ready.
+status. M5's implementation-tier acceptance follows the verified A08 closure;
+M6 remains BLOCKED. The implementation is unpublished, not release-ready.
 
 | Date | Verdict | Coverage | Report |
 |---|---|---|---|
-| 2026-11-04 | CURRENT AMBER: A01–A07 verified closed; GREEN plan A08 remains, M5 blocked/unaccepted at bounded stop | Candidate4e5e3c1; four fresh personas plus writer; O01/O02 separate Operator gaps, count dissent normalized12 not13 | [Final disposition](2026-11-04T0508Z_attention-final-disposition.md) |
+| 2026-11-04 | CURRENT AMBER: A08 verified fixed/closed; no Agent action survives; O01/O02 Operator limitations remain | Metadata5ab2703 over unchanged reviewed product4e5e3c1; four fresh personas+writer, context/lens independence; structure checked before indexing | [A08 closure](2026-11-04T0535Z_attention-a08-closure.md) |
+| 2026-11-04 | Historical AMBER: A01–A07 closed; GREEN A08 subsequently closed by0535 report | Candidate4e5e3c1; four fresh personas+writer; O01/O02 and historical count dissent preserved | [Final disposition before A08 closure](2026-11-04T0508Z_attention-final-disposition.md) |
 | 2026-11-04 | AMBER re-audit; A01–A05 closed, GREEN A06/A07 recorded; M5 unaccepted at audit | Candidateb0b244f, five fresh contexts; O01/O02 separate Operator limitations | [Re-audit before metadata fix](2026-11-04T0442Z_attention-final-recheck.md) |
 | 2026-11-04 | RED final implementation audit; six Agent actions recorded; M5 unaccepted at audit | Accepted M4; unaccepted M5 candidate101442e at audit; four fresh personas plus writer, context/lens independence only | [Final audit before fixes](2026-11-04T0405Z_attention-final.md) |
 | 2026-11-04 | Historical RED checkpoint; deferred M5 release findings recorded, not qualitative GREEN | Accepted M2 and blocked M3 WIP; four fresh personas plus writer, same-family context/lens independence | [Blocked checkpoint](2026-11-04T0114Z_attention-wip-checkpoint.md) |
