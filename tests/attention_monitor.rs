@@ -507,6 +507,9 @@ fn pi_stale_scan_stops_at_the_directory_bound() {
     assert!(source.diagnostics.contains(&Diagnostic::StalePiStatus));
     assert!(source.diagnostics.contains(&Diagnostic::SessionOverflow));
     assert_eq!(fs::read_dir(root).unwrap().count(), 4097);
+    // The scan cap limits lifecycle evidence too; omitted filenames are not deletions.
+    assert!(!source.membership.complete);
+    assert_eq!(source.membership.instances.len(), 4096);
 }
 
 // Proves only bounded regular UUID.json candidates are read, never temporary/arbitrary filenames or directories.

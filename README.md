@@ -9,7 +9,8 @@ or **Attention needed**, together with the model, repository, and last completed
 - Native Rust process targeting Windows 10/11 x86-64 — no Electron, no Node.js sidecar, no service
 - One-second default polling with a two-second state-update expectation
 - Content-free by construction: prompts, responses, tool arguments, tool results, tokens, and
-  credentials are never parsed, stored, logged, or displayed
+  credentials are never modeled, stored, logged, or displayed; temporary raw-byte scanning is
+  distinct from allow-listed field deserialization (see [Privacy](docs/operator/privacy.md))
 - Per-user PowerShell install and startup registration, with no administrator privileges
 - Manual local validation, packaging, tagging, and GitHub release publishing — no CI service
 
@@ -26,9 +27,16 @@ and [glossary](.wgm/specs/CONTEXT.md) govern that work. Pi input/error alerts an
 alerts are planned; successful completion stays quiet. Actual Windows/WSL interaction and resource
 measurements remain blocked on Operator validation (M6), not proven by a Linux cross-build.
 
+**Build STOPPED:** M1 is accepted at `0d79111`; M2 at `058ef74` (93 workspace tests).
+M3 candidate `e193b6c` is **BLOCKED/unaccepted after three recovery cycles**: recorded 41 targeted /
+122 workspace passes, rugged RUGGED and quality PASS do not override spec CHANGES-REQUESTED.
+The [source-reset/Copilot-episode collision](docs/architecture.md#m3-blocked-checkpoint) is traced
+only, not runtime reproduced; diagnostic setup approval was denied. M4/M5 remain pending:
+there is no attention GUI or attention demo.
+
 No release has been published from this repository yet. Until one is, build the portable archive
 yourself with `bash scripts/package-release.sh 0.1.0`. Releases are previews: Windows x86-64 only,
-per-user, unsigned, and without auto-update. Agent-owned deterministic work is complete; the
+per-user, unsigned, and without auto-update. Historical MVP agent-owned deterministic work is complete; the
 [Windows interaction checklist](docs/agent/testing.md#manual-windows-checklist) must pass before a
 preview is published, and `scripts/measure-performance.ps1` must pass before promoting a preview
 build to stable. See [Release responsibilities](docs/agent/release-responsibilities.md).
@@ -106,8 +114,8 @@ Windows interaction and the 50 MB / 5% resource budgets are verified manually wi
 | `docs/` | Operator and agent documentation, indexed by [`docs/README.md`](docs/README.md) |
 | `specs/` | Constitution, glossary, acceptance spec, and architecture decision |
 | `scenarios/` | Holdout user journeys used only during validation and review |
-| `IMPLEMENTATION_PLAN.md` | Ordered build tasks and current status |
-| `AGENTS.md` | Lean operational build and validation guide |
+| `IMPLEMENTATION_PLAN.md` | Historical MVP tasks; active attention status lives in `.wgm/IMPLEMENTATION_PLAN.md` |
+| `AGENTS.md` | Protected historical MVP command sheet; see Development for active routing |
 
 ## License
 

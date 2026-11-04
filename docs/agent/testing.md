@@ -19,16 +19,35 @@ decision, packaging, and cross-build contracts hold.
 |---|---|
 | `cargo test --lib` | Parser, session metadata, configuration, status, icon, action, and app-decision unit tests, including the privacy contract |
 | `cargo test --test monitor` | Monitor integration over fixture session folders: session selection, offset caching, state transitions, degraded input |
-| `cargo test --workspace` | Both of the above in one run |
+| `cargo test --workspace` | All Rust unit/integration tests, including aggregate monitoring and candidate controller/workers; see the checkpoint boundary below |
 | `cargo clippy --all-targets -- -D warnings` | Lint contract on the host target |
 | `bash scripts/validate-toolchain.sh` | Workspace tests plus the Windows cross-build, asserting a PE32+ x86-64 artifact |
 | `bash scripts/package-release.sh 0.1.0` | Reproducible packaging, checksum generation, archive integrity, and expected entries |
 | `bash scripts/check-docs.sh` | The documentation contract: required files, audience labels, links, required commands, stale status claims, shell syntax |
 | `pwsh -NoProfile -File scripts/test-installer.ps1` | Installer and uninstaller behaviour in a sandbox profile, plus static safety checks on all PowerShell scripts |
-| `bash scripts/demo.sh 0.1.0` | The end-to-end gate: workspace tests, the Windows cross-build, both fixture journeys in tier order, reproducible packaging, and archive plus checksum verification, leaving the release candidate in `dist/` |
+| `bash scripts/demo.sh 0.1.0` | The historical MVP-only end-to-end gate: workspace tests, the Windows cross-build, both fixture journeys in tier order, reproducible packaging, and archive plus checksum verification, leaving the MVP release candidate in `dist/`; not an attention demo |
 
 `scripts/test-installer.ps1` reports Windows-shortcut behaviour as **skipped** on a non-Windows
 host. Skipped is not passed; those cases are covered by the manual checklist below.
+
+## Attention checkpoint gates
+
+Recorded results below are checkpoint history, not fresh execution or permission to resume:
+
+| Milestone | Exact gate | Recorded disposition |
+|---|---|---|
+| M1 publisher and actual offline pi host | `node --test tests/pi-status.test.mjs tests/pi-host.test.mjs` | Accepted `0d79111`, 33/33; includes the real offline host, not Windows/WSL interaction |
+| M2 aggregate monitor/config/probe | `cargo test --workspace` | Accepted `058ef74`, 93 tests; bounded pi reads/freshness, configured sources and independent Copilot sessions |
+| M3 controller/workers | `cargo test --test attention_monitor --test attention_controller && cargo test --workspace` | Candidate `e193b6c`, 41 targeted / 122 workspace passes; **BLOCKED/unaccepted after three recovery cycles** |
+
+M3's rugged RUGGED and quality PASS do not override **spec CHANGES-REQUESTED** for the
+[source-reset/Copilot-episode collision](../architecture.md#m3-blocked-checkpoint).
+This is a source trace only, not a runtime reproduction; diagnostic setup approval was denied.
+The build is STOPPED. M4/M5 remain pending: no attention GUI integration or attention demo.
+`bash scripts/demo.sh 0.1.0` remains MVP-only. M6 actual Windows/WSL interaction and performance
+remain blocked; these host gates cannot satisfy it. See the
+[follow-up plan](../../.wgm/IMPLEMENTATION_PLAN.md) and
+[pi integration guide](../../integrations/pi/README.md).
 
 ## Fixture journeys
 

@@ -40,8 +40,8 @@ agent responsibility, the page says who does what.
   TrayGoblin starts.
 - [Status reference](operator/status-reference.md) — how each state is derived, what the tooltip
   lines mean, and how fast the tray reacts.
-- [Configuration](operator/configuration.md) — `config.json` location, both supported keys,
-  accepted ranges, and the restart rule.
+- [Configuration](operator/configuration.md) — legacy settings, aggregate source configuration,
+  explicit probe loading, accepted ranges, and the restart rule.
 - [Privacy](operator/privacy.md) — the content-free contract, what is read, and how to confirm it
   yourself.
 - [Troubleshooting](operator/troubleshooting.md) — symptom-first fixes, including Copilot session
@@ -76,10 +76,16 @@ agent responsibility, the page says who does what.
 | [`specs/tray-status.md`](../specs/tray-status.md) | Executable acceptance criteria and their verifying commands |
 | [`specs/adr/0001-native-rust-tray.md`](../specs/adr/0001-native-rust-tray.md) | Accepted architecture decision |
 | [`IMPLEMENTATION_PLAN.md`](../IMPLEMENTATION_PLAN.md) | Historical completed MVP tasks |
-| [Attention follow-up plan](../.wgm/IMPLEMENTATION_PLAN.md) | Planned, not shipped: pi/Copilot multibox attention work; M6 owes actual Windows/WSL field validation |
+| [Attention follow-up plan](../.wgm/IMPLEMENTATION_PLAN.md) | Build STOPPED: M1 accepted `0d79111`, M2 accepted `058ef74` (93 tests); M3 candidate `e193b6c` BLOCKED/unaccepted after three cycles; M4/M5 pending, M6 actual Windows/WSL/performance blocked |
 | [Attention spec](../.wgm/specs/session-attention.md) | Follow-up behavior, defaults, limitations, and exact validation boundaries |
 | [Attention glossary](../.wgm/specs/CONTEXT.md) | Follow-up source, instance, and episode vocabulary |
-| [`AGENTS.md`](../AGENTS.md) | Lean build and validation command sheet |
+| [`AGENTS.md`](../AGENTS.md) | Protected historical MVP command sheet; [Development](agent/development.md#active-follow-up-routing) clarifies active routing |
+
+Completion claims concern the historical MVP only. The
+[M3 checkpoint](architecture.md#m3-blocked-checkpoint) retains spec CHANGES-REQUESTED for a
+source-reset/Copilot-episode collision despite recorded passing checks. It is source-traced,
+not runtime reproduced; diagnostic setup approval was denied. No attention GUI or attention
+demo is available.
 
 Validate this documentation set with:
 

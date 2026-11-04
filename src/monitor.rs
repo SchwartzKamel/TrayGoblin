@@ -252,12 +252,13 @@ fn read_workspace_metadata(session_dir: &Path) -> Option<crate::session::Workspa
 use crate::{
     attention::{
         AttentionEpisode, AttentionSnapshot, Capabilities, Diagnostic, EpisodeReason, MAX_PI_BYTES,
-        MAX_SESSIONS, SessionSnapshot, SessionState, SourceSnapshot, is_uuid, parse_pi_status,
+        MAX_SESSIONS, MAX_SOURCE_MEMBERSHIP, SessionSnapshot, SessionState, SourceMembership,
+        SourceSnapshot, is_uuid, parse_pi_status,
     },
     config::{ConfigError, Provider, Source, validate_sources},
 };
 
-const MAX_DIRECTORY_ENTRIES: usize = 4096;
+const MAX_DIRECTORY_ENTRIES: usize = MAX_SOURCE_MEMBERSHIP;
 const MAX_EVENT_READ: usize = 256 * 1024;
 const MAX_WORKSPACE_BYTES: usize = 16 * 1024;
 
@@ -283,8 +284,17 @@ impl AttentionMonitor {
     }
 
     pub fn poll_at(&mut self, now_ms: u64) -> AttentionSnapshot {
+        self.poll_with_clock(&|| now_ms)
+    }
+
+    /// Sample observation time after filesystem reads, independently of request age.
+    pub fn poll_with_clock(&mut self, clock: &dyn Fn() -> u64) -> AttentionSnapshot {
         AttentionSnapshot {
-            sources: self.sources.iter_mut().map(|s| s.poll_at(now_ms)).collect(),
+            sources: self
+                .sources
+                .iter_mut()
+                .map(|s| s.poll_with_clock(clock))
+                .collect(),
         }
     }
 
@@ -319,6 +329,10 @@ impl SourceMonitor {
     }
 
     pub fn poll_at(&mut self, now_ms: u64) -> SourceSnapshot {
+        self.poll_with_clock(&|| now_ms)
+    }
+
+    fn poll_with_clock(&mut self, clock: &dyn Fn() -> u64) -> SourceSnapshot {
         let mut result = SourceSnapshot {
             source: self.source.clone(),
             capabilities: Capabilities {
@@ -328,6 +342,7 @@ impl SourceMonitor {
             sessions: Vec::new(),
             unavailable_pi_statuses: 0,
             diagnostics: Vec::new(),
+            membership: SourceMembership::default(),
         };
         let root = match fs::canonicalize(&self.source.path) {
             Ok(root) => root,
@@ -364,15 +379,18 @@ impl SourceMonitor {
         let mut candidates = Vec::new();
         let mut unavailable_pi = Vec::new();
         let mut pi_timestamps = HashMap::new();
+        result.membership.complete = true;
         for (index, entry) in entries.enumerate() {
             if index >= MAX_DIRECTORY_ENTRIES {
                 result.diagnose(Diagnostic::SessionOverflow);
+                result.membership.complete = false;
                 break;
             }
             let entry = match entry {
                 Ok(entry) => entry,
                 Err(_) => {
                     result.diagnose(Diagnostic::SessionUnavailable);
+                    result.membership.complete = false;
                     continue;
                 }
             };
@@ -384,6 +402,7 @@ impl SourceMonitor {
                 Ok(kind) => kind,
                 Err(_) => {
                     result.diagnose(Diagnostic::SessionUnavailable);
+                    result.membership.complete = false;
                     continue;
                 }
             };
@@ -393,11 +412,16 @@ impl SourceMonitor {
                     if !name.strip_suffix(".json").is_some_and(is_uuid) {
                         continue;
                     }
+                    result.membership.instances.insert(
+                        name.strip_suffix(".json")
+                            .expect("checked filename")
+                            .to_owned(),
+                    );
                     if !kind.is_file() {
                         result.diagnose(Diagnostic::UnsafeEntry);
                         continue;
                     }
-                    match self.poll_pi(&name, &entry.path(), now_ms) {
+                    match self.poll_pi(&name, &entry.path(), clock) {
                         Ok((snapshot, timestamp)) => {
                             if result.sessions.len() == MAX_SESSIONS {
                                 result.diagnose(Diagnostic::SessionOverflow);
@@ -431,13 +455,16 @@ impl SourceMonitor {
                         Ok(directory) => directory,
                         Err(_) => {
                             result.diagnose(Diagnostic::UnsafeEntry);
+                            result.membership.complete = false;
                             continue;
                         }
                     };
                     match active_lock_identity(&directory.path) {
                         Ok(Some(lock)) => {
+                            result.membership.instances.insert(format!("{name}:{lock}"));
                             if candidates.len() == MAX_SESSIONS {
                                 result.diagnose(Diagnostic::SessionOverflow);
+                                result.membership.complete = false;
                                 break;
                             }
                             candidates.push((
@@ -448,7 +475,10 @@ impl SourceMonitor {
                             ));
                         }
                         Ok(None) => {}
-                        Err(_) => result.diagnose(Diagnostic::SessionUnavailable),
+                        Err(_) => {
+                            result.diagnose(Diagnostic::SessionUnavailable);
+                            result.membership.complete = false;
+                        }
                     }
                     continue;
                 }
@@ -467,7 +497,7 @@ impl SourceMonitor {
                 };
             }
             let mut snapshot = unavailable_session(&name, &format!("{name}:{}", session.lock));
-            match session.poll(&path, now_ms, &mut self.lines_processed, &mut result) {
+            match session.poll(&path, clock, &mut self.lines_processed, &mut result) {
                 Ok(()) => {
                     snapshot.model = session.model.clone();
                     snapshot.directory = session.directory.clone();
@@ -508,7 +538,7 @@ impl SourceMonitor {
         &self,
         name: &str,
         path: &Path,
-        now: u64,
+        clock: &dyn Fn() -> u64,
     ) -> Result<(SessionSnapshot, u64), Diagnostic> {
         let id = name
             .strip_suffix(".json")
@@ -521,7 +551,7 @@ impl SourceMonitor {
                     Diagnostic::SessionUnavailable
                 }
             })
-            .and_then(|bytes| parse_pi_status(&bytes, now))
+            .and_then(|bytes| parse_pi_status(&bytes, clock()))
             .and_then(|status| {
                 if status.instance_id != id {
                     Err(Diagnostic::InvalidPiStatus)
@@ -552,6 +582,7 @@ fn unavailable_session(session: &str, instance: &str) -> SessionSnapshot {
         attention: None,
         run_started_at_ms: None,
         last_run_duration_ms: None,
+        publisher_expires_at_ms: None,
     }
 }
 
@@ -827,7 +858,7 @@ impl CopilotSession {
     fn poll(
         &mut self,
         directory: &Path,
-        now: u64,
+        clock: &dyn Fn() -> u64,
         lines: &mut u64,
         result: &mut SourceSnapshot,
     ) -> io::Result<()> {
@@ -873,6 +904,7 @@ impl CopilotSession {
         file.seek(SeekFrom::Start(self.offset))?;
         let mut bytes = Vec::new();
         file.take(MAX_EVENT_READ as u64).read_to_end(&mut bytes)?;
+        let now = clock();
         let mut start = 0;
         for (index, byte) in bytes.iter().enumerate() {
             if *byte != b'\n' {

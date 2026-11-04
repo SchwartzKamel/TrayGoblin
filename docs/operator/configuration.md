@@ -44,6 +44,10 @@ Native tray integration is a subsequent implementation task; the existing GUI
 and default probe retain their original single-session behavior for now.
 Without `--all-sessions`, the probe still emits exactly its original six fields.
 
+**Probe loading differs from the GUI:** it never autoloads the GUI settings file.
+Pass `--config <path>` explicitly; without it the probe constructs defaults.
+An explicitly selected missing file is an error, not the GUI's missing-file/defaults behavior.
+
 Missing/legacy configuration supplies two aggregate sources: native Copilot at
 `%USERPROFILE%\.copilot\session-state` and pi at
 `%USERPROFILE%\.traygoblin\pi` (`$HOME` on development hosts). `sessionRoot`
@@ -122,6 +126,74 @@ unknown events/fields. Large historical logs may need multiple polls to initiali
 without replaying historical attention. Source polling here is synchronous:
 worker isolation and notification delivery are separate tasks, not claims made
 by the aggregate probe.
+
+### Explicit aggregate probe example
+
+From the checkout root on Linux/WSL, use the existing compiled probe below (the equivalent
+build-and-run invocation is
+`cargo run --bin tray-goblin-probe -- --config "$example_dir/config.json" --all-sessions`).
+This creates only external temporary configuration and a synthetic HOME; no real user settings,
+new repository scripts or fixtures are needed:
+
+```bash
+example_dir=$(mktemp -d /tmp/traygoblin-probe-XXXXXX)
+mkdir -p "$example_dir/home"
+printf '%s\n' '{"pollIntervalMs":1000,"sources":[{"id":"fixture-copilot","label":"Fixture Copilot","kind":"copilot","path":"tests/fixtures/live-session"}]}' > "$example_dir/config.json"
+env -i PATH="$PATH" HOME="$example_dir/home" XDG_CONFIG_HOME="$example_dir/home/.config" \
+  ./target/debug/tray-goblin-probe --config "$example_dir/config.json" --all-sessions
+```
+
+Expected: exit 0 and one aggregate `sources` entry, not the legacy six-field object.
+Output below normalizes only `<lock-mtime-ns>`, which depends on checkout metadata:
+
+```json
+{
+  "sources": [{
+    "source": {
+      "id": "fixture-copilot",
+      "label": "Fixture Copilot",
+      "kind": "copilot",
+      "path": "tests/fixtures/live-session",
+      "wsl_distro": null
+    },
+    "capabilities": {"input_detection": false, "session_errors": true},
+    "sessions": [{
+      "session_id": "session-new",
+      "instance_id": "session-new:inuse.2222.lock:<lock-mtime-ns>",
+      "model": "gpt-5.6-sol",
+      "directory": "C:/fixture/content-free-demo",
+      "state": "working",
+      "attention": null,
+      "run_started_at_ms": 1785223200000,
+      "last_run_duration_ms": null
+    }],
+    "unavailable_pi_statuses": 0,
+    "diagnostics": []
+  }]
+}
+```
+
+The inactive `session-old` is absent. Invalid and conflicting inputs, using the same temporary
+directory, are explicit failures:
+
+```bash
+printf '%s\n' '{"pollIntervalMs":499}' > "$example_dir/invalid.json"
+env -i PATH="$PATH" HOME="$example_dir/home" XDG_CONFIG_HOME="$example_dir/home/.config" \
+  ./target/debug/tray-goblin-probe --config "$example_dir/invalid.json" --all-sessions
+env -i PATH="$PATH" HOME="$example_dir/home" XDG_CONFIG_HOME="$example_dir/home/.config" \
+  ./target/debug/tray-goblin-probe --config "$example_dir/config.json" --all-sessions \
+  --session-root tests/fixtures/live-session
+```
+
+Each exits 1 with no JSON on stdout; stderr respectively is:
+
+```text
+error: poll interval 499ms is outside the accepted 500-10000ms range
+error: --session-root cannot override explicit sources with --all-sessions
+```
+
+These examples were checked with the existing compiled probe and synthetic HOME/config only,
+not a freshly built candidate. They are not attention GUI/controller or Windows evidence.
 
 ## Examples
 

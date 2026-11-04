@@ -2,12 +2,12 @@
 
 **Audience:** Operators
 
-TrayGoblin is a passive, local, read-only observer. This page states exactly what it reads, what it
-refuses to read, and how you can confirm both claims yourself.
+TrayGoblin is a passive, local, read-only observer. This page distinguishes raw-byte scanning
+from the allow-listed metadata it models and exposes.
 
 ## The content-free contract
 
-TrayGoblin never reads, deserializes, stores, logs, or displays:
+TrayGoblin never deserializes into modeled fields, persists, logs, or displays:
 
 - prompt text or any other user message content
 - assistant responses
@@ -21,10 +21,15 @@ This is a project non-negotiable in [`specs/CONSTITUTION.md`](../../specs/CONSTI
 best-effort goal, and it is enforced by a test that fails the build if a sensitive field is ever
 modeled.
 
-## What it does read
+Session files can contain sensitive fields alongside metadata. Readers temporarily buffer and
+scan raw bytes (including unknown fields) before allow-listed parsing; that is not a promise
+that sensitive bytes never enter memory. Those fields are skipped, not turned into content
+values in the data model. Repository file contents are not read.
+
+## Legacy MVP metadata
 
 From the Copilot session folder (`%USERPROFILE%\.copilot\session-state` by default), TrayGoblin
-reads only:
+models only:
 
 | Source | Fields used |
 |---|---|
@@ -35,21 +40,43 @@ reads only:
 Everything else on those lines — including every field TrayGoblin does not recognize — is ignored
 and never enters the program's data model.
 
+The default probe has exactly six output fields: `state`, `model`, `repository`,
+`active_directory`, `last_turn_duration_ms`, and `attention_reason`. This is the legacy snapshot,
+not an inventory of the aggregate attention model.
+
+## Aggregate probe/core metadata
+
+With explicit `--all-sessions`, the allow-list is separate:
+
+| Scope | Modeled/output metadata |
+|---|---|
+| Source | Configured `id`, `label`, `kind`, `path`, optional `wsl_distro`; `capabilities.input_detection` and `session_errors` |
+| Session | `session_id`, `instance_id`, `model`, `directory`, `state`, `attention` (`id`, `reason`, `notify`), `run_started_at_ms`, `last_run_duration_ms` |
+| Health | `unavailable_pi_statuses` and fixed `diagnostics` codes |
+
+The pi v1 reader additionally validates publication version/provider, episode and publication
+timestamp. Membership identities, publisher freshness deadlines and candidate-controller delivery
+bookkeeping are internal, not extra JSON fields. See [Configuration](configuration.md) for the
+explicit loading example and limits. Aggregate metadata is not evidence of attention GUI
+integration; M3 remains [blocked/unaccepted](../architecture.md#m3-blocked-checkpoint).
+
 ## Where data goes
 
-- **Nowhere off your machine.** TrayGoblin makes no network requests. It has no telemetry, no
-  crash reporting, and no update check.
-- **Nothing is persisted.** The only file TrayGoblin writes is your own
+- **No telemetry or outbound service.** TrayGoblin has no network client, crash reporting or
+  update check. Configured filesystem roots can include UNC/WSL paths; those reads may use the
+  OS filesystem transport and may wake WSL.
+- **No observed session data is persisted by the tray/probe.** The only file the GUI writes is your own
   `%APPDATA%\TrayGoblin\config.json`, and only when you choose **Open settings** and the file does
-  not exist yet.
+  not exist yet. The separate opt-in [pi publisher](../../integrations/pi/README.md) writes its
+  content-free status files; it is not tray/probe persistence or a shipped attention GUI.
 - **All access is read-only.** Copilot's session files are opened for reading; TrayGoblin never
   writes, moves, truncates, or deletes them, and never changes Copilot CLI configuration or
   telemetry settings.
 
 ## Error messages are content-free too
 
-Failures name the action and the missing prerequisite, never a path, a session identifier, or an
-operating-system message. For example:
+GUI startup/action failures name the action and the missing prerequisite, never a path, a
+session identifier, or an operating-system message. For example:
 
 ```text
 Open in VS Code is unavailable: no active Copilot directory is known
@@ -59,6 +86,12 @@ Copilot session state is unreadable
 
 Because release builds run without a console, startup failures appear in a small dialog using the
 same content-free wording.
+
+The CLI probe has a different diagnostic surface: config I/O errors use
+`error: cannot read config: <OS error>`, and invalid JSON can report parser location/type details.
+It does not echo the config document, but OS-supplied text is not covered by the fixed GUI-message
+guarantee. Aggregate JSON intentionally includes configured paths and source/session identities;
+review probe output before sharing it.
 
 ## What is visible on screen
 
@@ -78,8 +111,8 @@ The first three checks are run from a repository checkout with stable Rust insta
   cargo test --lib events::tests::does_not_model_sensitive_fields
   ```
 
-- **Inspect what a snapshot contains:** the diagnostic probe prints the complete set of values
-  TrayGoblin can hold at one instant.
+- **Inspect the legacy snapshot:** the diagnostic probe prints the six fields listed above,
+  not the aggregate model's complete inventory.
 
   ```bash
   cargo run --bin tray-goblin-probe -- --session-root tests/fixtures/live-session

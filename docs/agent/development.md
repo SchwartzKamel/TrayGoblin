@@ -37,6 +37,22 @@ cargo run --bin tray-goblin-probe -- --session-root tests/fixtures/live-session
 `tray-goblin` itself cannot start on a non-Windows host; it prints that message and points at the
 probe instead. This is deliberate, not a gap.
 
+## Active follow-up routing
+
+Root `IMPLEMENTATION_PLAN.md`, `specs/tray-status.md` and `specs/CONTEXT.md` describe the historical
+MVP. Active attention work uses the [follow-up plan](../../.wgm/IMPLEMENTATION_PLAN.md),
+[attention spec](../../.wgm/specs/session-attention.md) and
+[glossary](../../.wgm/specs/CONTEXT.md), still under the root constitution.
+Protected root `AGENTS.md` retains historical forward-contract/T6 wording; architecture and
+manual-release docs now exist. Use this routing clarification without changing that protected file.
+
+**Build STOPPED:** M1 accepted `0d79111`, M2 accepted `058ef74` (93 workspace tests).
+[M3 candidate `e193b6c`](../architecture.md#m3-blocked-checkpoint) is BLOCKED/unaccepted after three
+recovery cycles; do not proceed to M4 integration. M4/M5 are pending, M6 actual Windows/WSL and
+performance checks blocked. Historical MVP completion does not certify the attention follow-up.
+The [Testing inventory](testing.md#attention-checkpoint-gates) separates accepted M1/M2 gates,
+M3's recorded-but-unaccepted checks and the MVP-only demo.
+
 ## Repository layout
 
 | Path | Contents |
@@ -61,20 +77,21 @@ probe instead. This is deliberate, not a gap.
    non-fatal. Copilot's session format is internal and will change.
 3. **Platform separation.** Parsing, monitoring, icon rendering, action selection, and app
    decisions stay platform-neutral; only `src/tray.rs` may use Win32 APIs.
-4. **Typed, content-free errors.** No stringly errors, no silent fallbacks, and no error text that
-   contains a path, a session identifier, or an operating-system message.
+4. **Typed, content-free core/UI errors.** No silent fallbacks; GUI startup/action messages must
+   not contain a path, session identifier or operating-system message. The existing diagnostic
+   probe's config-error surface is separate; see [Privacy](../operator/privacy.md).
 5. **No elevation, no CI dependency.** Installation, startup registration, and normal use must work
    without administrator rights, and no validation or release step may require a hosted pipeline.
 6. **Performance shape.** Keep the default cadence at one second, keep reads incremental, and do
    not add a runtime that threatens the 50 MB working-set budget.
 7. **Canonical vocabulary.** Use the code and UI names from
-   [`specs/CONTEXT.md`](../../specs/CONTEXT.md): `Generating` in code, **Working** in the UI;
-   `Error` in code, **Attention needed** in the UI.
+   [`specs/CONTEXT.md`](../../specs/CONTEXT.md) for the MVP: `Generating` in code, **Working** in the UI;
+   `Error` in code, **Attention needed** in the UI. Use the attention glossary for the additive model.
 
 ## Holdout rule
 
-`scenarios/` contains holdout user journeys. Do not read them while implementing; they are used
-only during validation and review.
+`scenarios/` (MVP) and `.wgm/scenarios/` (attention) contain holdout user journeys. Do not read
+either while implementing; they are reserved for authorized validation and review.
 
 ## Working on the tray shell
 
@@ -111,8 +128,9 @@ bash scripts/validate-toolchain.sh
 bash scripts/check-docs.sh
 ```
 
-Record the exact command and its result in `IMPLEMENTATION_PLAN.md` for the task you advanced. A
-plan task is not done until its own validation command exits zero.
+Record exact commands/results in the task's governing plan: root `IMPLEMENTATION_PLAN.md` for
+historical MVP tasks, `.wgm/IMPLEMENTATION_PLAN.md` for attention work. A task's exact gate must
+exit zero, but passing checks do not override a blocking spec review or authorize resuming M4.
 
 ## Related
 
