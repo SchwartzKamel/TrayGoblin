@@ -48,7 +48,10 @@ Never present a manual Windows result as if a deterministic command had produced
    the toolchain; tray interaction and performance measurement require real Windows.
 3. **State the promotion gate.** Any page that discusses releases must say that the Windows
    performance measurement must pass before promoting a preview build to stable.
-4. **Never claim CI.** No hosted pipeline builds, validates, or publishes this project.
+4. **Keep CI optional.** Read-only Actions test ZIPs are not Releases and require
+   signed-in downloads. Never describe CI as a validation/release prerequisite or
+   as real pi-host/model, Windows/WSL or performance proof; manual clean-tag release
+   and M6 remain required. See [Release responsibilities](release-responsibilities.md#optional-ci-never-a-release-prerequisite).
 5. **Use canonical vocabulary** from [`specs/CONTEXT.md`](../../specs/CONTEXT.md): **Idle**,
    **Working**, **Attention needed**, Active session, Active directory, Turn latency. Avoid the
    network-flavoured latency phrasing listed there, and avoid informal synonyms for Working.

@@ -13,7 +13,10 @@ Root MVP plans are historical. See [Release responsibilities](agent/release-resp
 Stable Rust, MinGW-w64 and `x86_64-pc-windows-gnu`; Node with installed pi1.4.0;
 PowerShell, Podman with cached Debian bookworm-slim, `zip`, `unzip`, `sha256sum`,
 `file`, Git and (only when separately authorized to publish) authenticated `gh`.
-No CI service builds or publishes this project. A real Windows 10/11 x86-64 + WSL
+Optional read-only Actions test ZIPs are not releases or prerequisites; local
+manual validation/build/package remains authoritative. See
+[Release responsibilities](agent/release-responsibilities.md#optional-ci-never-a-release-prerequisite).
+A real Windows 10/11 x86-64 + WSL
 host is required for field verification, not replaced by OCI or cross-compilation.
 Use the shipped [provisioning/check recipe](../integrations/pi/README.md#offline-gate-prerequisites)
 for the actual npm pi1.4.0 package/override and cached image. Online preparation

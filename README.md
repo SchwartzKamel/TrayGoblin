@@ -14,7 +14,7 @@ new persisted session errors (input detection is unavailable). Completion is qui
   credentials are never modeled, stored, logged, or displayed; temporary raw-byte scanning is
   distinct from allow-listed field deserialization (see [Privacy](docs/operator/privacy.md))
 - Per-user PowerShell install and startup registration, with no administrator privileges
-- Manual local validation, packaging, tagging, and GitHub release publishing — no CI service
+- Manual local validation, packaging, tagging, and GitHub release publishing; optional read-only CI test ZIPs
 
 ## Project status
 
@@ -23,9 +23,8 @@ performance tooling, Operator/Agent documentation, and the end-to-end release-ca
 implemented and validated. See [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) for authoritative
 historical MVP task state.
 
-**Attention implementation, UNPUBLISHED:** M1–M4 are accepted at implementation/
-compilation tier (M4 `d94c85c`). M5 packaging/setup/continuous offline demo is
-in_progress and unaccepted pending actual disposition. The
+**Attention implementation, UNPUBLISHED:** M1–M5 are accepted at implementation/
+compilation tier, including packaging/setup and the continuous offline demo. The
 [active plan](.wgm/IMPLEMENTATION_PLAN.md) is the sole authority for the current
 candidate, exact gate results, review/audit verdicts and next acceptance action.
 The [attention spec](.wgm/specs/session-attention.md) and
@@ -38,7 +37,13 @@ No Linux cross-build, offline pi host, OCI CLI or structural docs check proves
 Windows notification delivery, performance or release readiness.
 
 No release has been published from this repository yet. Until one is, build the portable archive
-yourself with `bash scripts/package-release.sh 0.1.0`. Releases are previews: Windows x86-64 only,
+yourself with `bash scripts/package-release.sh 0.1.0`. Optional test ZIPs, when available,
+are downloadable from a successful **Actions → Windows test build** run (signed-in GitHub
+account required), not **Releases**. See [Installation](docs/operator/installation.md#1-obtain-the-archive).
+CI runs Rust tests and Windows-target compilation/package only; it does not prove real pi-host,
+model, interactive Windows/WSL or performance behavior. The full manual attention demo and
+clean-tag release remain independent and authoritative; CI is never a prerequisite.
+Releases are previews: Windows x86-64 only,
 per-user, unsigned, and without auto-update. Historical MVP agent-owned deterministic work is complete; the
 [Windows interaction checklist](docs/agent/testing.md#manual-windows-checklist) must pass before a
 preview is published, and `scripts/measure-performance.ps1` must pass before promoting a preview

@@ -15,11 +15,22 @@ Requirements:
 
 ## 1. Obtain the archive
 
-Releases are built and published manually from a clean tagged commit; there is no CI pipeline and
-no auto-update. Two supported ways to get the archive:
+Official releases are built and published manually from a clean tagged commit;
+there is no auto-update. Local manual builds remain authoritative, with no CI
+prerequisite. Ways to get the archive:
 
 - Download `tray-goblin-0.1.0-windows-x86_64.zip` and its `.sha256` file from a published GitHub
   release for this repository, if one exists for the version you want.
+- Optional **test ZIP**, when available: sign in to GitHub, open this repository's
+  **Actions → Windows test build**, select a successful main/manual run for the
+  source commit you want, then download **tray-goblin-windows-x86_64** under
+  **Artifacts**. Extract that outer artifact ZIP to obtain the inner versioned ZIP
+  and sibling `.zip.sha256`; verify those below before extracting/installing the
+  inner ZIP. Artifacts expire after 14 days; if absent/expired, build locally.
+  These are unsigned, unpublished test builds, **not GitHub Releases**. A green
+  run proves Rust tests and Windows-target compilation/package only, not real
+  pi-host/model, interactive Windows/WSL or performance behavior. The full manual
+  attention demo and M6 field/resource checks remain independent and required.
 - Build it yourself from a checkout. On a Linux or WSL host with the toolchain described in
   [Development](../agent/development.md):
 
@@ -29,8 +40,9 @@ no auto-update. Two supported ways to get the archive:
 
   The archive and checksum are written to `dist/`.
 
-No pre-built release is published yet. Until the project status in
-[`README.md`](../../README.md#project-status) changes, use the build-it-yourself path above.
+No official release is published yet; no actual CI download is claimed until CI2
+verifies a GitHub run. See [`README.md`](../../README.md#project-status) for current
+status. If no test artifact is available, use the build-it-yourself path above.
 
 ## 2. Verify the checksum before extracting
 

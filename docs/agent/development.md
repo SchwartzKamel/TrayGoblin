@@ -58,8 +58,8 @@ MVP. Active attention work uses the [follow-up plan](../../.wgm/IMPLEMENTATION_P
 Protected root `AGENTS.md` retains historical forward-contract/T6 wording; architecture and
 manual-release docs now exist. Use this routing clarification without changing that protected file.
 
-M1–M4 are accepted at implementation/compilation tier. M5 is in_progress and
-unaccepted pending actual disposition. The follow-up plan above is the sole
+M1–M5 are accepted at implementation/compilation tier and remain unpublished.
+The follow-up plan above is the sole
 authority for the current candidate, exact gate results, review/audit verdicts
 and next acceptance action; this guide does not duplicate transient review state.
 [M3 recovery history](../architecture.md#m3-recovery-checkpoint) retains the rejected
@@ -67,6 +67,39 @@ candidate and dissent, then compiled proof/fix and later independent acceptance;
 do not resurrect it as a current blocker. M6 actual Windows/WSL and 50 MB/5%
 evidence remains BLOCKED. The [Testing inventory](testing.md#attention-checkpoint-gates)
 separates each evidence tier. Historical MVP completion does not certify attention.
+
+## Optional CI test builds
+
+`.github/workflows/windows-test-build.yml` uses Ubuntu 24.04, public apt tools,
+stable Rust and the existing `scripts/validate-toolchain.sh` / `scripts/package-release.sh`
+commands on push to main or manual dispatch. Its token is contents:read only; it
+uploads test ZIP/checksum files for 14 days, never creates Releases, tags or deployments.
+It runs synthetic Rust tests under isolated HOME/XDG while retaining public compiler
+caches; it is Windows-target compilation/package, not real pi-host/model/Windows/WSL
+or performance evidence. Local manual builds, the full attention demo and clean-tag
+release procedure remain authoritative and independent; no CI prerequisite.
+
+Offline CI policy/verifier controls (PyYAML and actionlint are development tools,
+not runtime dependencies):
+
+```bash
+actionlint .github/workflows/windows-test-build.yml
+python3 scripts/test-ci-workflow.py
+bash scripts/verify-ci-build.sh --self-test
+```
+
+After a separately authorized push, CI2 verifies the **actual** exact-SHA run and
+download (requires authenticated `gh`, Python 3 and GNU `timeout`):
+
+```bash
+bash scripts/verify-ci-build.sh --repo SchwartzKamel/TrayGoblin --commit "$(git rev-parse HEAD)" --out-root .wgm/ci-downloads
+```
+
+The verifier bounds discovery/watch/download to 120/1500/120 seconds (kill-after 5),
+retains a new owned child on failure, and reports run/artifact URLs, source SHA and
+digests only after ZIP/checksum/PE/clean unpublished manifest verification. No
+caller folder is deleted. Offline stubs are not GitHub boundary evidence.
+See [Installation](../operator/installation.md#1-obtain-the-archive) for signed-in downloads.
 
 ## Repository layout
 

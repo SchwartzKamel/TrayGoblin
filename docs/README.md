@@ -73,7 +73,7 @@ agent responsibility, the page says who does what.
 
 | Source | Authority |
 |---|---|
-| [`specs/CONSTITUTION.md`](../specs/CONSTITUTION.md) | Non-negotiable principles: privacy, performance, no elevation, no CI |
+| [`specs/CONSTITUTION.md`](../specs/CONSTITUTION.md) | Non-negotiable principles: privacy, performance, no elevation, no CI dependency |
 | [`specs/CONTEXT.md`](../specs/CONTEXT.md) | Canonical vocabulary for states and session terms |
 | [`specs/tray-status.md`](../specs/tray-status.md) | Executable acceptance criteria and their verifying commands |
 | [`specs/adr/0001-native-rust-tray.md`](../specs/adr/0001-native-rust-tray.md) | Accepted architecture decision |
@@ -88,8 +88,11 @@ Completion claims concern the historical MVP only. The
 dissent AND the later compiled proof/fix/independent acceptance, not an active blocker.
 The current native wiring is cross-compiled; M5 provides a continuous offline
 pi-host→Rust implementation demo and standalone package resources, not release readiness.
-M5 remains in_progress/unaccepted pending actual disposition; M6 actual
-Windows/WSL/performance evidence remains BLOCKED. Consult the active plan above
+M1–M5 are accepted at implementation tier and unpublished; M6 actual
+Windows/WSL/performance evidence remains BLOCKED. Optional read-only Actions test
+ZIPs are not Releases; signed-in downloads and the local fallback are described
+in [Installation](operator/installation.md#1-obtain-the-archive). CI is not a release
+prerequisite or M6 proof. Consult the active plan above
 for current candidate/gates/verdicts, not duplicated status or historical reports.
 The [standalone setup source](../assets/attention/SETUP.md) ships as resources/SETUP.md;
 the [pi integration](../integrations/pi/README.md) explains explicit persistent opt-in.

@@ -27,9 +27,10 @@ Who does what for a TrayGoblin release. The step-by-step commands are in
 Version0.1.0 is unpublished. The active attention plan (`.wgm/IMPLEMENTATION_PLAN.md`),
 not the historical root MVP completion record, is the sole authority for the current
 candidate, exact gate results, review/audit verdicts and next acceptance action.
-M1–M4 are accepted at implementation/compilation tier. M5 is in_progress/unaccepted
-pending actual disposition; M6 actual Windows/WSL and resource evidence is BLOCKED.
-No author is authorized to tag/push/publish.
+M1–M5 are accepted at implementation/compilation tier and remain unpublished;
+M6 actual Windows/WSL and resource evidence is BLOCKED. Optional CI/pushing code
+is user-approved, but the parent owns any push after offline gates and independent
+review. No CI1 author is authorized to stage/commit/push/tag/publish.
 A release advances only when the preceding gate is green.
 
 1. **Behaviour gate** — the deterministic suite and the cross-build pass. Nothing is tagged before
@@ -58,11 +59,20 @@ A release advances only when the preceding gate is green.
 Never describe a manual Windows result as if the deterministic suite had proven it, and never treat
 a skipped check as a passed check.
 
-## No CI, by design
+## Optional CI, never a release prerequisite
 
-No GitHub Actions workflow or other hosted pipeline builds, validates, signs, or publishes this
-project. Validation and release are local, scripted, and reproducible. Adding a hosted pipeline as a
-*release prerequisite* would violate [`specs/CONSTITUTION.md`](../../specs/CONSTITUTION.md).
+The read-only Windows test workflow offers ZIP/checksum artifacts on successful
+main/manual runs, retained 14 days. Downloads require a signed-in GitHub account
+and live under **Actions**, not **Releases**. It runs Rust tests and Windows-target
+compilation/package only: no signing, release creation, tag writes or deployment;
+no real pi-host/model, Windows/WSL interaction or performance claim. CI2 owns actual
+run/download verification; offline controls are not proof of GitHub availability.
+See [Development](development.md#optional-ci-test-builds) and
+[Installation](../operator/installation.md#1-obtain-the-archive).
+
+Local validation, the full manual attention demo and clean-tagged release remain
+authoritative and independent. Adding a hosted pipeline as a *release prerequisite*
+would violate [`specs/CONSTITUTION.md`](../../specs/CONSTITUTION.md). M6 remains required.
 
 ## Release notes must state
 

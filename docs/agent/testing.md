@@ -32,8 +32,8 @@ host. Skipped is not passed; those cases are covered by the manual checklist bel
 
 ## Attention checkpoint gates
 
-Recorded M1–M4 counts are acceptance history, not a new field result. M5 remains
-in_progress/unaccepted pending actual disposition; M6 real Windows/WSL/resource
+M1–M5 are accepted at implementation tier and unpublished; recorded counts are
+acceptance history, not a new field result. M6 real Windows/WSL/resource
 evidence remains BLOCKED. The [active plan](../../.wgm/IMPLEMENTATION_PLAN.md) is
 the sole authority for the current candidate, exact gate results, review/audit
 verdicts and next acceptance action. This inventory does not imply release readiness:
@@ -44,7 +44,7 @@ verdicts and next acceptance action. This inventory does not imply release readi
 | M2 aggregate monitor/config/probe | `cargo test --workspace` | Accepted `058ef74`, 93 tests; bounded pi reads/freshness, configured sources and independent Copilot sessions |
 | M3 controller/workers | `cargo test --test attention_monitor --test attention_controller && cargo test --workspace` | Accepted `f4ef6de`, 52 targeted/136 workspace; rejected-candidate dissent and compiled regressions retained in plan/history |
 | M4 native wiring/manual labels | Node host gate + workspace + Windows release cross-build | Accepted `d94c85c`, 36 Node/141 Rust, PE/import validation; NOT actual shell delivery |
-| M5 continuous offline demo/package | `bash scripts/demo-attention.sh --container podman && bash scripts/demo.sh 0.1.0 && bash scripts/check-docs.sh` | in_progress/unaccepted pending actual disposition; current candidate/gates/verdicts are in the active plan above |
+| M5 continuous offline demo/package | `bash scripts/demo-attention.sh --container podman && bash scripts/demo.sh 0.1.0 && bash scripts/check-docs.sh` | Accepted at implementation tier; 14 actual-host phases/5 adapter requests, separate restricted OCI, 141 Rust, 56 installer/one explicit Windows shortcut skip; current candidate/gates/verdicts are in the active plan above |
 
 The attention demo installs the actual ZIP into an external synthetic root,
 removes extraction, then loads that persisted extension in TWO concurrent actual
@@ -77,6 +77,12 @@ swallowed-error canary, plus real isolated annotated tags. That is offline
 control-flow evidence, NOT permission to tag/publish. Parent runs independent
 holdout judging/audit; authors never open scenarios or invent satisfaction scores.
 See the [pi integration guide](../../integrations/pi/README.md).
+
+Optional CI test ZIPs cover synthetic Rust tests and Windows-target compilation/
+packaging only. They do not run this full manual attention demo or prove real
+pi-host/model, interactive Windows/WSL or performance behavior. Offline verifier
+stubs do not prove a downloadable GitHub asset; CI2 owns that live boundary.
+See [Development](development.md#optional-ci-test-builds).
 
 ## Fixture journeys (historical MVP contract)
 
