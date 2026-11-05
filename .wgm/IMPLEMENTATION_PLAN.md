@@ -166,6 +166,31 @@ reads can wake WSL; removing that source and restarting disables those reads.
   External prompt RUN/M5.A08.plan-fix.prompt. Then parent accepts/commits and ONLY
   THEN runs judge-one.sh M5; tier1>=95 before2, then3. No new product feature work.
 
+## Optional CI follow-up — user approved
+Current source is pushed: remote main=dbe78f7 at intake, existing14 commits landed.
+Standard track; fresh one-task authors/non-author reviewers. Governing spec:
+`.wgm/specs/ci-test-artifacts.md`. Optional CI cannot replace manual release/M6.
+CI Plan-exit: RUGGED (fresh discoverable companion,2026-11-04), report
+`.wgm/rugged/ci-plan-current.md`; initial UNKNOWN interruption-test gap closed by
+named self-test/deadlines/owned-partial/retry controls. Constitution/coverage/
+consistency PASS, no placeholder tasks, first CI1 bounded, CI2 is exact live demo.
+Readiness98/100; prior goal/scope explicitly approved, no further material unknown.
+
+### CI1 — Configure optional Windows-target test builds
+- **objective:** Add a pinned, read-only GitHub workflow that runs canonical core/cross-build/package scripts and uploads Windows test ZIPs.
+- **files/areas:** `.github/workflows/windows-test-build.yml`, `scripts/test-ci-workflow.py`, `scripts/verify-ci-build.sh`, `README.md`, `docs/agent/development.md`, `docs/agent/release-responsibilities.md`, `docs/operator/installation.md`.
+- **validation:** `actionlint .github/workflows/windows-test-build.yml && python3 scripts/test-ci-workflow.py && bash scripts/verify-ci-build.sh --self-test && bash scripts/check-docs.sh && bash scripts/validate-toolchain.sh && bash scripts/package-release.sh 0.1.0`
+- **acceptance:** C1–C3. Ubuntu24.04 builds Windows x86-64 GNU using existing scripts; push main/manual triggers, contents:read only, pinned checkout/upload SHAs, no persisted credentials/secrets/releases, success-only nonempty ZIP+SHA upload retained14days. Semantic policy/mutants and YAML syntax checked. Live verifier created with exact commit/run/artifact/path/checksum/PE/clean manifest validation; no destructive download directory reuse. Docs clarify signed-in test-artifact downloads, current M1–M5 acceptance and no CI/release dependency. M6 stays unverified.
+- **status:** pending
+- **validation-signal follow-up from initial UNKNOWN plan review:** Verifier self-test above MUST include partial-download interruption with2s test-only deadline/nonzero within7s/no success URL, unchanged caller sentinel, retained owned partial directory/evidence, successful retry into DIFFERENT owned child. Production discovery120s/watch1500s/download120s kill-after5; wrong/missing/failed/cancelled/expired/ambiguous inspection cases fail. Offline controlled stubs do not replace actual CI2. Initial plan report retained `.wgm/rugged/ci-plan-initial.md`; revised exact design gets companion rerun before author.
+
+### CI2 — Push CI and prove actual artifact download
+- **objective:** Prove the optional workflow and artifact on GitHub, not only local syntax/build.
+- **files/areas:** `scripts/verify-ci-build.sh`, `.wgm/IMPLEMENTATION_PLAN.md`, `.wgm/rugged/`, `.wgm/docs/audit/`.
+- **validation:** `bash scripts/verify-ci-build.sh --repo SchwartzKamel/TrayGoblin --commit "$(git rev-parse HEAD)" --out-root .wgm/ci-downloads`
+- **acceptance:** C4–C5. Push without force; exact current main workflow run exits success; one nonexpired artifact downloads to owned child directory. ZIP/checksum and packaged PE x64 GUI/clean source/published=false identity verified. Record exact remote/run SHA, artifact ID/link, command/exit/digest. If a real job fails, retain logs and fix the actual cause. Final metadata push checked again at latest remote HEAD; no publication/Windows-runtime claim. Final Standard docs audit and independent satisfaction check recorded.
+- **status:** pending
+
 ### M6 — Real Windows/WSL field and resource evidence
 - **objective:** Actual delivery/recovery and50MB/5% budget before release readiness.
 - **files/areas:** `scripts/test-attention-windows.ps1`, `scripts/measure-performance.ps1`, `.wgm/rugged/`, this plan.
@@ -199,12 +224,12 @@ No tracked history/runtime scratch was deleted; raw reports/refs remain.
   4e5e3c1; current AMBER0508 verifies those closed but A08 remains. Reports immutable;
   severity/execution/count dissent preserved, including denied principal replay,
   no verbatim online provisioning claim, and12-versus13 manifest normalization.
-- **OPERATIVE NEXT:** M1–M5, current implementation reviews/RUGGED, five-role
-  A08 closure and final tiered judgment97.74 are COMPLETE. No further Agent author,
-  freeze/review/audit/judge or feature round is requested. Operator M6 is next:
-  genuine Windows/WSL interaction/recovery/installation/Startup and matching-digest
-  performance on the packaged executable. No tag/publication/promotion is authorized.
-  Protected root AGENTS.md changes still need explicit scoped approval.
+- **OPERATIVE NEXT:** M1–M5/A08 acceptance and97.74 judgment stand. User now
+  approved optional Windows CI test downloads and pushing commits. Existing source
+  is pushed; execute CI1 then CI2 with exact local/live gates and fresh reviews.
+  Only after actual GitHub artifact download supply its link. Operator M6 remains
+  required for real Windows/WSL behavior/resources, not fulfilled by CI. No tag,
+  official release/publication/promotion or protected root AGENTS.md edit authorized.
 
 ## Telemetry and consented workflow harvest
 Full-request wall time, allocated-lane capacity, active-agent time, parked time,

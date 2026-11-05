@@ -1,0 +1,13 @@
+name: optional-windows-ci-download
+description: Pushed code has a real downloadable Windows test ZIP without becoming a release prerequisite.
+tier: 1
+target:
+  kind: cli
+  start: bash scripts/verify-ci-build.sh --repo SchwartzKamel/TrayGoblin --commit "$(git rev-parse HEAD)" --out-root .wgm/ci-downloads
+steps:
+  - action: Push the approved commit to main and open its Windows test build workflow.
+    expect: The actual GitHub run for that exact SHA succeeds using canonical Rust/MinGW packaging; no release/tag write or secret escalation occurs.
+  - action: Download the run's nonexpired Windows artifact through GitHub.
+    expect: Download contains a nonempty Windows ZIP and matching SHA256 file; packaged executable is x86-64 GUI, build manifest matches the commit and is clean/unpublished, and persistent pi/setup resources are present.
+  - action: Read repository installation/release guidance.
+    expect: It distinguishes signed-in Actions test-artifact downloads from published releases and preserves manual tagged release plus unverified Windows/WSL/performance M6 gates.
