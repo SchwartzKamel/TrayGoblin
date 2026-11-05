@@ -8,6 +8,7 @@ M6 remains BLOCKED. The implementation is unpublished, not release-ready.
 
 | Date | Verdict | Coverage | Report |
 |---|---|---|---|
+| 2026-11-05 | CURRENT CI AMBER: no surviving Agent action; O01/O02 Operator limits retained | One Standard four-persona+writer handoff audit over current CI docs/spec/task state and protected governance; actual source1ab1f7f/run41949924649/artifact13380142776. Two filing links repaired at1c6b0cb with exact gate0/RUGGED/fresh scoped specPASS+qualityPASS; canonical fixed-report structure0 checked before indexing; raw report/history preserved | [Optional CI test downloads](2026-11-05T0150Z_ci-test-artifacts.md) |
 | 2026-11-04 | CURRENT AMBER: A08 verified fixed/closed; no Agent action survives; O01/O02 Operator limitations remain | Metadata5ab2703 over unchanged reviewed product4e5e3c1; four fresh personas+writer, context/lens independence; structure checked before indexing | [A08 closure](2026-11-04T0535Z_attention-a08-closure.md) |
 | 2026-11-04 | Historical AMBER: A01–A07 closed; GREEN A08 subsequently closed by0535 report | Candidate4e5e3c1; four fresh personas+writer; O01/O02 and historical count dissent preserved | [Final disposition before A08 closure](2026-11-04T0508Z_attention-final-disposition.md) |
 | 2026-11-04 | AMBER re-audit; A01–A05 closed, GREEN A06/A07 recorded; M5 unaccepted at audit | Candidateb0b244f, five fresh contexts; O01/O02 separate Operator limitations | [Re-audit before metadata fix](2026-11-04T0442Z_attention-final-recheck.md) |
