@@ -197,6 +197,33 @@ Readiness98/100; prior goal/scope explicitly approved, no further material unkno
 - **independent live acceptance — 2026-11-05 UTC:** Candidate `d526ad3e940a3f3268750f8d80ba7688c5a79689`, `refs/wgm/candidates/CI2`; exactly one current `.wgm/rugged/CI2-current.md` RUGGED and fresh non-author specPASS/qualityPASS (`RUN/CI2.{spec,quality}.log`). Parent checked current reports/candidate, six real gh command exits0,14 unchanged source identities, hosted141 runner passes, one nonexpired artifact/two siblings/17 entries/ten static source matches; quality independently downloaded outer artifact and matched all642 log lines. Fresh validator-only holdout context:100/100 for actual source1ab1f7f, not future metadata/full-app readiness (`RUN/CI2.validator.log`); independently downloaded bytes/API/policy, no source defect. Context/lens independence only; model/tooling independence not claimed. Reservations: signed-in14day unsigned Actions test ZIP, public-toolchain/Node warnings, no cross-host compilation reproducibility, actual Windows/WSL/performance/installation remains M6, manual clean-tag release independent. Standard audit/R1 filing repair are now accepted above; final metadata push/actual latest-HEAD verification is recorded externally, without a recursive pending-review cycle.
 - **live C4–C5 evidence — 2026-11-05 UTC:** EXACT validation command above exit0 for pushed clean source `1ab1f7fa107452d27fc4c7eb4268bb118a8d639b`. Actual GitHub Ubuntu24.04 run [41949924649](https://github.com/SchwartzKamel/TrayGoblin/actions/runs/41949924649) completed success; exactly one nonexpired [artifact13380142776](https://github.com/SchwartzKamel/TrayGoblin/actions/runs/41949924649/artifacts/13380142776), expires2026-11-19T01:40:01Z. Owned download `.wgm/ci-downloads/tray-goblin-ci-ot8bjka4/download`; raw command/API/watch/download evidence in its sibling `evidence/`, real Actions log `RUN/CI2.first.actions.log`. Inner ZIP SHA256 `e95fa745d6004a79f6293f1e3b03796dcc476d0ded68a61fc856ccf211b07f72`; PE SHA256 `ab0aeac884c58814a16be31162c2cc1ebc423d5e02e4c7cfe76806e5c5e2699e`. Verified two regular siblings, exact17 ZIP entries/CRC/checksum/resources, actual x64GUI PE and manifest exact sourceSHA/worktreeDirty=false/published=false/executable digest. Hosted runners141 passed/0 failed/0 ignored; policy25+6, double-packing match and success-only upload actually ran. Local and hosted PE hashes differ with public stable toolchains; each archive binds its own actual digest, no cross-host reproducibility claim. No failed live run or source remediation. Fresh CI2 reviews, validator and final Standard audit are accepted above. Final metadata push is checked again at latest remote HEAD, recorded externally to avoid perpetual commit/build loops. Read-only signed-in14day test artifact only; M6/manual release/no CI prerequisite unchanged.
 
+## Actual Releases CI follow-up — user approved
+User explicitly requested actual GitHub Releases publishing rather than only
+Actions artifacts. Standard track; governed by `.wgm/specs/release-publishing.md`.
+Manual dispatch prepares a DRAFT now; public publish modes require existing M6
+actual report/digest gates and keep manual fallback. No gate waiver/public release
+is authorized without evidence. Root AGENTS.md remains protected.
+Plan-exit release follow-up: RUGGED (fresh companion2026-11-05), report
+`.wgm/rugged/release-plan-current.md`; initial UNKNOWN P4 policy-check omission
+corrected in exact REL1 gate. Goal/constraints/user-go known; every task has exact
+areas/commands/criteria/status, REL2 is real draft demo with tier1 holdout. Current
+constitution/coverage/consistency PASS, readiness98. No additional product decision.
+
+### REL1 — Implement real draft/publish release workflow
+- **objective:** Add optional manual GitHub Release creation and ZIP/SHA asset promotion from an existing verified CI build, with publish gates.
+- **files/areas:** `.github/workflows/release.yml`, `scripts/publish-release.py`, `scripts/test-release-workflow.py`, `scripts/verify-release.sh`, `scripts/verify-release.py` if a bounded helper is needed, `README.md`, `docs/agent/{development,release-responsibilities,testing}.md`, `docs/manual-release.md`, `docs/operator/installation.md`.
+- **validation:** `actionlint .github/workflows/release.yml && python3 scripts/test-release-workflow.py && python3 scripts/publish-release.py --self-test && python3 scripts/test-ci-workflow.py && bash scripts/check-docs.sh && bash scripts/validate-toolchain.sh`
+- **acceptance:** P1–P4. Dispatch-only draft/prerelease/stable defaultdraft, existing peeled tag/version/source run identity, scoped contents:write/actions:read, pinned checkout/no persisted credentials/no shell input injection. Download/promote SAME verified CI artifact without rebuild. Draft first; matching retry only, never published/clobber mutation. Publish modes bounded actual Windows+WSL/full performance evidence gates before API publish, no fabricated live reports. Negative tests cover missing/wrong/partial evidence, unpeeled tag, corrupt/mismatched assets, existing published/different draft and interrupted second upload with bounded retry/owned partial/caller sentinel; no success until both Release assets verified. Docs distinguish owner-only draft from public release and manual fallback/M6. Existing build CI preserved.
+- **status:** pending
+- **validation-signal follow-up:** Initial companion plan UNKNOWN found P4's existing CI policy command omitted from exact REL1 gate; explicit `python3 scripts/test-ci-workflow.py` is now included, with no live/field boundary weakened. Initial report retained under `.wgm/rugged/release-plan-initial.md`; rerun readiness before author.
+
+### REL2 — Push, manually tag and run actual draft Releases CI
+- **objective:** Prove actual GitHub Release record/assets/download via the new workflow, not another Actions artifact.
+- **files/areas:** `scripts/verify-release.sh`, `.wgm/IMPLEMENTATION_PLAN.md`, `.wgm/rugged/`, `.wgm/docs/audit/`.
+- **validation:** `bash scripts/verify-release.sh --repo SchwartzKamel/TrayGoblin --tag v0.1.0 --draft`
+- **acceptance:** P5. After REL1 exact local gates/reviews, push without force, manually create annotated v0.1.0 from clean validated source only if absent (never replace), get successful source-build run, dispatch release.yml DRAFT. Actual Release has draft=true/tag source correct and two permanent ZIP/SHA assets; download both and verify digests/PE/manifest/source/resources. Retain real run/API/download evidence and auth-required draft URL. No public prerelease/stable because M6 is still absent. Final Standard docs audit/independent validator/current remote equality and source correspondence recorded. Final metadata-only push must not relabel original draft build source.
+- **status:** pending
+
 ### M6 — Real Windows/WSL field and resource evidence
 - **objective:** Actual delivery/recovery and50MB/5% budget before release readiness.
 - **files/areas:** `scripts/test-attention-windows.ps1`, `scripts/measure-performance.ps1`, `.wgm/rugged/`, this plan.
@@ -230,7 +257,7 @@ No tracked history/runtime scratch was deleted; raw reports/refs remain.
   4e5e3c1; current AMBER0508 verifies those closed but A08 remains. Reports immutable;
   severity/execution/count dissent preserved, including denied principal replay,
   no verbatim online provisioning claim, and12-versus13 manifest normalization.
-- **OPERATIVE NEXT:** Operator M6: run the two exact genuine Windows/WSL field and
+- **OPERATIVE NEXT (superseded by user-approved REL1/REL2 above):** Operator M6: run the two exact genuine Windows/WSL field and
   matching-executable performance commands above before manual clean-tag release.
   CI1/CI2 and validator100 are accepted at optional test-download tier; latest
   post-metadata HEAD/download/equality proof is terminal external evidence in RUN.

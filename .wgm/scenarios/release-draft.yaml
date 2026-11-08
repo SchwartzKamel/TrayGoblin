@@ -1,0 +1,13 @@
+name: real-github-release-assets
+description: Optional Releases CI creates a real draft with permanent assets while respecting public-publish gates.
+tier: 1
+target:
+  kind: cli
+  start: bash scripts/verify-release.sh --repo SchwartzKamel/TrayGoblin --tag v0.1.0 --draft
+steps:
+  - action: Dispatch the Releases workflow for an annotated validated tag and its successful CI build run, mode draft.
+    expect: An actual successful workflow creates a GitHub Release draft for that peeled commit with ZIP and checksum assets, rather than merely another Actions artifact.
+  - action: Download both draft assets as the repository owner.
+    expect: They exactly match the validated source CI artifact, checksum/GUI PE/clean manifest source and persistent resources; no expiry inherited from Actions.
+  - action: Attempt public publish without actual matching Windows field/performance reports.
+    expect: Offline negative gate controls prove publish rejected before any public mutation; actual live run remains draft and cannot pretend M6 passed.
