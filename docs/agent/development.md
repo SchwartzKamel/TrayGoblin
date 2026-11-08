@@ -101,6 +101,33 @@ digests only after ZIP/checksum/PE/clean unpublished manifest verification. No
 caller folder is deleted. Offline stubs are not GitHub boundary evidence.
 See [Installation](../operator/installation.md#1-obtain-the-archive) for signed-in downloads.
 
+## Optional manual Releases CI
+
+`.github/workflows/release.yml` is dispatch-only on trusted main. It uses pinned
+checkout with full history/tags and no persisted credentials; only the bounded
+release job has contents:write/actions:read. It runs no Cargo/build scripts with
+that token. The tag supplies code/version identity, while dispatch main can carry
+later reviewed reports. It promotes exact verified existing CI bytes to an actual
+GitHub Release DRAFT, uploads both files, then downloads permanent assets to check
+both digests. It never creates/moves tags, rebuilds, repacks or clobbers assets.
+Matching owned partial drafts can resume into new local children; errors preserve
+local evidence/draft and never emit a success URL. Published/different drafts fail.
+
+Public prerelease/stable modes require full actual M6 reports AND separate bounded
+`acceptance_evidence` before any Release mutation, rechecked before publishing.
+[The concrete schema](../manual-release.md#complete-public-acceptance-record) binds
+manual clean-tagged canonical validation/build and actual CI byte equivalence,
+both Windows all-11 checklists, independent M6 reviews and operator acceptance.
+The live verifier pins clean local main/origin/main to actual remote main and
+workflow ID/path, distinct from tag/build source; it checks completed successful
+paginated candidates before polling, never watches unrelated dispatches;
+M6 remains BLOCKED, so only separately authorized parent live DRAFT preparation
+is currently permitted. See [Manual release](../manual-release.md#optional-manual-releases-ci)
+for collection/placement/dispatch and [Testing](testing.md#optional-release-controls)
+for the exact offline gate. Local release fallback remains independent; neither
+workflow is a release prerequisite. REL2, not an author self-test, proves the real
+owner-visible Release record and permanent downloads.
+
 ## Repository layout
 
 | Path | Contents |

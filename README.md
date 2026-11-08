@@ -14,7 +14,7 @@ new persisted session errors (input detection is unavailable). Completion is qui
   credentials are never modeled, stored, logged, or displayed; temporary raw-byte scanning is
   distinct from allow-listed field deserialization (see [Privacy](docs/operator/privacy.md))
 - Per-user PowerShell install and startup registration, with no administrator privileges
-- Manual local validation, packaging, tagging, and GitHub release publishing; optional read-only CI test ZIPs
+- Manual local validation/release fallback; optional read-only CI test ZIPs and manual draft-first Releases CI
 
 ## Project status
 
@@ -36,18 +36,27 @@ Actual Windows/WSL interaction and 50 MB/5% evidence remain **M6 BLOCKED**.
 No Linux cross-build, offline pi host, OCI CLI or structural docs check proves
 Windows notification delivery, performance or release readiness.
 
-No release has been published from this repository yet. Until one is, build the portable archive
-yourself with `bash scripts/package-release.sh 0.1.0`. Optional test ZIPs, when available,
-are downloadable from a successful **Actions → Windows test build** run (signed-in GitHub
-account required), not **Releases**. See [Installation](docs/operator/installation.md#1-obtain-the-archive).
+No public release has been published yet. Build locally with
+`bash scripts/package-release.sh 0.1.0`, or obtain an optional signed-in **Actions →
+Windows test build** ZIP (14-day retention). The optional **Manual Releases**
+workflow prepares an actual **Releases** draft with permanent ZIP/checksum assets,
+not another Actions artifact. Draft downloads require owner/collaborator sign-in;
+no live draft is claimed by local preparation tests. Public prerelease AND stable
+publishing require full genuine M6 field/resource reports for the exact executable
+AND a [complete acceptance record](docs/manual-release.md#complete-public-acceptance-record):
+manual clean-tagged canonical build/CI byte equivalence, dated all-11 checklists
+on Windows 10 and 11 x64, fresh independent reviews and operator authorization.
+See [Installation](docs/operator/installation.md#1-obtain-the-archive) and
+[manual dispatch instructions](docs/manual-release.md#optional-manual-releases-ci).
 CI runs Rust tests and Windows-target compilation/package only; it does not prove real pi-host,
 model, interactive Windows/WSL or performance behavior. The full manual attention demo and
 clean-tag release remain independent and authoritative; CI is never a prerequisite.
 Releases are previews: Windows x86-64 only,
 per-user, unsigned, and without auto-update. Historical MVP agent-owned deterministic work is complete; the
 [Windows interaction checklist](docs/agent/testing.md#manual-windows-checklist) must pass before a
-preview is published, and `scripts/measure-performance.ps1` must pass before promoting a preview
-build to stable. See [Release responsibilities](docs/agent/release-responsibilities.md).
+preview is published. Performance must pass before promoting a preview build to stable;
+`scripts/measure-performance.ps1` and full M6 field evidence are required for BOTH
+public prerelease and stable modes. See [Release responsibilities](docs/agent/release-responsibilities.md).
 
 ## Documentation
 

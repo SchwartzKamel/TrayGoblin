@@ -2,7 +2,8 @@
 
 **Audience:** Agents
 
-This is the manual, no-CI procedure, NOT authorization to publish. Version 0.1.0
+This includes the independent manual, no-CI fallback and OPTIONAL manually
+dispatched Releases CI, NOT authorization to publish. Version 0.1.0
 is **unpublished**. The active [attention plan](../.wgm/IMPLEMENTATION_PLAN.md)
 governs this candidate; M6 actual Windows/WSL and resource evidence remains
 blocked. An implementation/cross-build/archive is not a delivered release.
@@ -143,17 +144,18 @@ Collectors are IN the archive; no source checkout is required:
 
 ```powershell
 $tg = Join-Path $env:LOCALAPPDATA 'Programs\TrayGoblin'
-pwsh -NoProfile -File "$tg\resources\test-attention-windows.ps1" -ExecutablePath "$tg\tray-goblin.exe" -EvidencePath .\windows-attention.json -PollIntervalMs 1000
-if ($LASTEXITCODE -ne 0) { throw 'Actual attention field gate failed' }
 pwsh -NoProfile -File "$tg\resources\measure-performance.ps1" -Path "$tg\tray-goblin.exe" -DurationSeconds 30 -JsonPath .\windows-performance.json
 if ($LASTEXITCODE -ne 0) { throw 'Actual performance gate failed' }
+pwsh -NoProfile -File "$tg\resources\test-attention-windows.ps1" -ExecutablePath "$tg\tray-goblin.exe" -EvidencePath .\windows-attention.json -PollIntervalMs 1000
+if ($LASTEXITCODE -ne 0) { throw 'Actual attention field gate failed' }
 ```
 
 `-PollIntervalMs` declares the EXPECTED running cadence, not a tray setting.
 Match `pollIntervalMs` or `poll_interval_ms`; omitted/null means 1000ms. For a
 nondefault config location, `-ConfigurationPath` must select the actual running
 file. For example, ONLY for a tray already using this file at 2000ms, replace the
-first collector line above with:
+attention collector invocation above with the invocation below, retaining the
+preceding performance invocation and its exit check:
 
 ```powershell
 $tg = Join-Path $env:LOCALAPPDATA 'Programs\TrayGoblin'
@@ -164,6 +166,12 @@ if ($LASTEXITCODE -ne 0) { throw 'Actual attention field gate failed' }
 Neither parameter changes tray cadence or supplies a GUI config flag. Edit the
 actual tray config and restart first. P sets attention/clear (2P+500ms) and quiet
 checks (3P). Stop the whole collection on any native failure.
+
+Measure performance FIRST, then start the field collector on that SAME running
+PID/path/processStartUtc. The field journey eventually restarts/quits TrayGoblin;
+collecting resources after that would not establish the same initial process.
+Both reports must establish NT major 10, matching full version/build and Windows
+10 (build 10240–21999) or Windows 11 (build >=22000).
 
 The attention script is genuinely INTERACTIVE, with per-case observations and
 conservative stopwatch timings, not yes/no capability inference. Both reports
@@ -285,6 +293,257 @@ Published defective release (withdraw, do not replace bytes under the same name)
 Then use a NEW version; never move an already-published tag. Operator rollback:
 remove pi opt-in/reload, uninstall and install the prior known-good archive;
 TrayGoblin configuration is kept by default.
+
+## Optional manual Releases CI
+
+This alternative promotes an EXISTING canonical Windows test-build ZIP/checksum
+unchanged to an actual GitHub Release. Public modes additionally require a manual
+build from the exact clean annotated tagged canonical main source and verification
+that its ZIP AND executable equal the promoted CI bytes. CI success is not that
+manual build/acceptance. Build manually without a write token; a byte mismatch
+blocks public admission rather than rebuilding/repacking in the write-token job. It does not rebuild/repackage measured
+bytes or create tags. Local Steps 1–8/manual fallback remain independent; CI is
+never a validation/release prerequisite. Existing read-only Windows test CI remains.
+
+**Now: DRAFT preparation only.** M6 actual Windows/WSL AND performance are absent.
+After REL1 local gates and fresh independent acceptance, the parent may push main,
+manually create/push an annotated `v0.1.0` from clean validated source if absent
+(Step 5; never retag), and identify a successful **Windows test build** run whose
+head SHA EXACTLY equals `git rev-parse 'refs/tags/v0.1.0^{commit}'`. The build run
+must have one nonexpired canonical artifact. Lightweight/unpeeled/wrong-source
+or version-mismatched tags fail; no branch fallback. No author runs these actions.
+
+Dispatch command template (NOT executed by offline fallback-fence tests): the
+authorized owner sets `BUILD_RUN_ID` to that actual numeric run ID before use.
+
+```text
+(
+  set -euo pipefail
+  : "${BUILD_RUN_ID:?set actual successful exact-tag Windows build run ID}"
+  gh workflow run release.yml --repo SchwartzKamel/TrayGoblin --ref main -f tag=v0.1.0 -f build_run_id="$BUILD_RUN_ID" -f mode=draft || exit $?
+  bash scripts/verify-release.sh --repo SchwartzKamel/TrayGoblin --tag v0.1.0 --draft || exit $?
+)
+```
+
+Run the verifier from a CLEAN local `main` whose HEAD, `refs/heads/main` and
+`refs/remotes/origin/main` equal the approved dispatch commit. Origin must be the
+named GitHub repository; live remote main must still match. Verify before further
+main metadata changes; there is no branch/SHA fallback. Inspected run ID, main,
+source SHA and workflow ID/path must match this pin, distinct from the immutable
+tag/build SHA. Completed successful runs across bounded paginated results are
+inspected first. Unrelated running/failing jobs are never watched and cannot
+preempt success; discovery polls for completion for 120 seconds, then fails closed.
+
+The workflow creates a DRAFT, attaches both exact files, downloads actual Release
+assets and verifies their digests before success. Notes disclose untested,
+unpublished/M6, unsigned per-user local install and limitations. Draft downloads
+require owner/collaborator GitHub sign-in; they are not anonymous public downloads.
+Draft assets persist independently of Actions' 14-day retention. The REL2 verifier
+reports actual owner-visible Release URL/IDs, not an Actions artifact link. Its
+read-only source run checks do not require the original artifact to remain unexpired
+after Release creation. `resources/build.json`'s published=false means BUILD TIME;
+never edit/repack it to claim publication.
+
+**Future public prerelease/stable:** use the exact permanent draft ZIP on actual
+Windows 10/11 + local WSL. Verify/install as a standard user, explicitly configure
+native+WSL pi/Copilot sources, then run both exact Step 8 collector commands against
+the installed executable. Include Startup/sign-in/uninstall operator checks and
+fresh independent M6 acceptance. Both reports must have the peeled build SHA,
+clean worktree flag and SHA256 of that downloaded EXE. Do not rebuild after measuring.
+
+Place the original collector JSON (no report editing, pass autofill or fake fixtures)
+in `.wgm/release-evidence/v0.1.0/field.json` and
+`.wgm/release-evidence/v0.1.0/performance.json` on trusted dispatch main. Reports
+may be committed AFTER the immutable release tag; the report buildSha still binds
+the tag, not dispatch HEAD. The owner reviews actual collection provenance and
+privacy before placing files: no real sessions, auth/config/conversation data or
+private path/user metadata may be exposed in a public repository. Use an isolated
+synthetic Windows profile/load for real observations; never synthetic observations.
+The workflow reads bounded JSON DATA only from that area (no traversal/symlinks),
+never executes it or logs report contents.
+
+The gate checks all 55 expected named field cases, observed PASS, exact per-case
+cadence/deadlines/quiet durations, completed/passed, process/hash/time identity,
+Windows/WSL/source/load/UNC information. Performance uses the CURRENT collector's
+`durationSeconds` (>=30), samples/processors, `peakWorkingSetMb`/`averageCpuPercent`,
+`maxWorkingSetMb`<=50/`maxIdleCpuPercent`<=5 and BOTH raw-comparison pass flags plus
+passed. Those flags are computed from unrounded measurements; the collector does
+not serialize raw byte/CPU counters. Rounded values alone cannot waive the flags.
+Wrong tier/source/hash, partial/failing/contradictory reports fail before any
+Release mutation. Offline fake reports are only shape/negative controls, never M6.
+
+Only after genuine M6 acceptance and explicit public authorization, dispatch main
+with mode `prerelease` (or `stable`) and inputs `field_evidence`,
+`performance_evidence` and `acceptance_evidence` set to the exact repository paths
+specified here and below; tag and source build run inputs remain unchanged. Both modes first prepare/verify a draft, then
+perform the single publish call. A previously prepared mode=draft record is NOT a
+public-mode retry: mode/notes/evidence ownership must match. Do not rewrite it to
+promote; plan a separately authorized new version/draft after M6, never bypass this
+fail-closed boundary via UI. Public assets are anonymously downloadable only AFTER
+confirmed publishing, unlike drafts. Neither public mode is run by this author task.
+
+**Recovery:** retain the owned local child, sanitized command exits, ownership/notes
+and actual draft on API/upload failure. No success URL is emitted until BOTH
+permanent assets match. Rerun the SAME tag/run/mode/evidence only for a matching
+owned draft; missing uploads resume into a NEW local child. Published releases,
+unknown/different drafts/assets, tag changes or changed notes/digests/mode are
+refused; no clobber/delete/rewrite. Inspect an incomplete server-side upload with
+the owner rather than automatically deleting it. Never discard caller files or
+use an Actions artifact success as a Release handoff.
+
+## Complete public acceptance record
+
+A separate REQUIRED input for BOTH public modes, not a flag or collector
+replacement. Missing/failing acceptance rejects BEFORE draft creation or upload
+for a public request; all evidence is re-read before the sole `PATCH draft=false`.
+Draft mode does not read or require it.
+
+### Creation and placement
+
+Only the authorized owner creates real acceptance; this author task does not.
+
+1. Before evidence commits, freeze/tag accepted canonical main as Steps 1–5 require.
+   In a clean checkout with canonical origin/main at that same commit, detach to
+   the tag and repeat the exact-source command list below. Retain actual UTC,
+   argv, exits and content-free result summaries from real logs. Manually package
+   without a write token. CI success never substitutes for these commands.
+2. Copy BOTH manually built files into
+   `.wgm/release-evidence/v0.1.0/manual-bytes/`: exactly
+   `tray-goblin-0.1.0-windows-x86_64.zip` and its `.zip.sha256` sibling, no extras.
+   These are validation artifacts, not replacements for CI assets. Admission reads
+   the actual ZIP/checksum/PE/clean manifest and requires BOTH ZIP and EXE hashes
+   to equal promoted CI bytes. Compiler/tool-version mismatch blocks admission.
+3. On BOTH real Windows 10 and Windows 11 x64 hosts, verify the promoted archive
+   and perform ALL 11 checklist items. Record every facet below separately with
+   actual UTC/outcome/commands/results, including Explorer/shell/menus, sign-out/
+   sign-in and both uninstall variants. Use isolated synthetic profiles, never
+   private sessions. On the primary collector host measure performance FIRST,
+   then field on that same initial process. Preserve original reports as
+   `.wgm/release-evidence/v0.1.0/field.json` and
+   `.wgm/release-evidence/v0.1.0/performance.json`.
+4. Using an ordinary JSON editor, create UTF-8
+   `.wgm/release-evidence/v0.1.0/acceptance.json` with EXACTLY the schema below,
+   transcribing real logs and observations, not autofilled PASS. Three fresh,
+   distinct non-author/non-builder/non-observer reviewers supply spec/quality/
+   rugged M6 dispositions and concrete review coverage. The observing operator
+   explicitly authorizes public publishing AFTER reviews. Parent privacy-reviews
+   and commits evidence on trusted main AFTER the immutable tag. This directory
+   is git-ignored: parent explicitly force-adds only the reviewed evidence files;
+   this author never stages/commits them.
+5. Owner dispatches `acceptance_evidence` as
+   `.wgm/release-evidence/v0.1.0/acceptance.json`, with the two collector paths above.
+   Every public retry uses the SAME record/digests. No UI/flag bypass or generic
+   `passed:true`. Never put offline positive controls in these live paths.
+
+### Acceptance schema v1
+
+Unique JSON keys; safe relative paths inside `.wgm/release-evidence/`, no symlinks/
+traversal. JSON <=256 KiB, manual ZIP <100 MiB. Unknown/missing record keys reject.
+Strings are nonempty and <=4096 characters except clean status stdout is empty.
+Dates are actual ISO-8601 timezone-aware UTC. Boolean/numeric fields are typed.
+Participant identities (`author`, `builder`, observers/reviewers/operator) are
+consistent canonical lowercase IDs: 1–128 characters from letters/digits/`._@-`,
+starting with a letter/digit. Whitespace/case aliases are rejected; parent must
+verify that different IDs really identify different independent people.
+The publisher logs only sanitized operations/exits and digests, not report bodies.
+
+Top-level keys (exact):
+
+- `schema`: `tray-goblin-acceptance-v1`.
+- `identity`: exactly `repo`, `tag`, `sourceRun` (positive integer build run ID),
+  `sourceSHA` (peeled 40-lowercase-hex commit), `archiveSha256`,
+  `executableSha256`, `fieldSha256`, `performanceSha256` (64-lowercase-hex).
+  Report digests cover ORIGINAL FILE BYTES including BOM/newlines; ZIP and EXE
+  hashes are separate. All values must equal downloaded/validated identities.
+- `createdUtc`, `author`: record UTC and actual candidate author's identity.
+- `manual`: exactly `sourceSHA`, `tag`, `worktreeDirty` (false), `canonicalMainSHA`
+  (same tag commit), `builder`, `startedUtc`, `finishedUtc`, `commands`,
+  `archivePath` (the manual ZIP path above).
+- `targets`: exactly two records, one `Windows10`, one `Windows11`, defined below.
+- `reviews`: exactly three records, one each `spec`, `quality`, `rugged`.
+- `operator`: exactly `identity` (full identical binding), `name` (one target
+  observer), `acceptedUtc`, `decision` (exactly
+  `AUTHORIZE-PUBLIC-PRERELEASE-AND-STABLE`), `statement` (>=20 characters of actual
+  explicit acceptance/authorization, not a flag).
+
+`manual.commands` is the ordered argv-array list below. Each entry has EXACTLY
+`argv`, `exit` (integer 0), `startedUtc`, `finishedUtc`, `result` (actual content-free
+summary/stdout), `resultSha256` (SHA256 of the UTF-8 result STRING, no implicit
+newline). Summarize long logs within 4096 characters while retaining real counts/
+results; keep full raw logs with the operator. For v0.1.0, use exactly:
+
+```text
+git checkout --detach v0.1.0
+git status --porcelain
+git rev-parse --verify HEAD
+git rev-parse --verify refs/tags/v0.1.0^{commit}
+git rev-parse --verify refs/heads/main
+git rev-parse --verify refs/remotes/origin/main
+git remote get-url origin
+git cat-file -t refs/tags/v0.1.0
+cargo test --workspace
+cargo clippy --all-targets -- -D warnings
+bash scripts/validate-toolchain.sh
+bash scripts/demo-attention.sh --container podman
+bash scripts/demo.sh 0.1.0
+bash scripts/check-docs.sh
+pwsh -NoProfile -File scripts/test-installer.ps1
+node scripts/test-release-docs.mjs
+bash scripts/package-release.sh 0.1.0
+```
+
+Split tokens into `argv` strings in this order. Status result is empty; all four
+rev-parse results equal `sourceSHA`; origin is canonical HTTPS with/without `.git`
+or `git@github.com:SchwartzKamel/TrayGoblin.git`; cat-file result is `tag`.
+Package result includes its actual archive hash and exact emitted line
+`Reproducible: two independent packing runs matched.` Compute result digests
+locally as `hashlib.sha256(result.encode('utf-8')).hexdigest()` in Python; file
+hashes use `sha256sum` or `Get-FileHash`. Later versions substitute their actual
+tag/version in argv and filenames; no undefined placeholder strings are accepted.
+
+Each target has EXACTLY `os` (`Windows10`/`Windows11`), `architecture` (`x64`),
+`windows` (collector-shaped `caption`, `version`, `build`), `observer`, `startedUtc`,
+`finishedUtc`, `checks`. Full version is `10.0.` plus build; Windows10 builds
+10240–21999, Windows11 >=22000. One target's metadata/window must match BOTH
+primary reports. Performance NT version/build AND PID/path/processStartUtc match
+field provenance. Do not edit metadata to match; measure before field quits.
+
+`checks` has EXACTLY the 11 keys and facet keys below. Each facet value has
+EXACTLY `outcome` (`PASS`), `observedUtc`, `observation` (>=20 characters of specific
+actual command/result or UI/OS observation, not merely PASS/name):
+
+| Checklist key | Required facet keys |
+|---|---|
+| `install` | `standard-user`, `files-localappdata`, `startup-shortcut` |
+| `icon` | `registered`, `explorer-restart-restored` |
+| `legibility` | `idle-working-attention-shape-color`, `high-contrast` |
+| `magic-moment` | `blocking-and-manual-dialog`, `other-session-progress`, `bounded-attention-clear`, `quiet-completion-abort-recovery`, `copilot-error-not-completion` |
+| `tooltip` | `aggregate-list-agreement`, `same-directory-identity`, `submenu-model-directory-run-start-duration`, `bounded-shell-text` |
+| `menu` | `attention-first-persistent-identity-metadata`, `suppressed-notifications-list`, `refresh`, `vscode`, `copilot-logs`, `settings`, `quit` |
+| `configuration` | `out-of-range-content-free-dialog` |
+| `startup` | `sign-out-sign-in-autostart` |
+| `uninstall` | `files-shortcut-removed`, `configuration-kept`, `remove-configuration` |
+| `field` | `all-55-native-wsl-cases`, `file-access-trace-no-reads` |
+| `performance` | `same-exe-host-30s-50mb-5percent` |
+
+Each review has EXACTLY `role`, `reviewer`, `reviewedUtc`, `verdict` (`ACCEPT`),
+`identity` (full identical binding), `coverage`, `findings` (empty list: unresolved
+findings block). Reviewers are distinct from one another AND author, manual builder
+and all observers. `coverage` has exactly six keys:
+`manual-source-validation-repro`, `manual-ci-byte-equivalence`, `Windows10-all11`,
+`Windows11-all11`, `field-55-wsl-privacy`, `performance-supported-same-host-budgets`.
+Each value is >=20 characters describing actual reviewed command results/digests,
+observations, resource flags/budgets and disposition. Name/role alone is insufficient.
+
+Chronology: ordered manual commands fit manual start/finish; target windows follow
+manual finish; every observation fits its target window; BOTH primary reports fit
+one matching target window. Reviews follow BOTH targets and precede operator
+acceptance, which precedes creation. Reviews/creation are within seven days of
+completion; creation is in the past seven days, never future. Stale/missing/failed/
+partial/non-independent/wrong-binding/digest records reject. Structural admission
+cannot prove a human told the truth: trusted owner privacy/provenance review of
+actual raw logs and observations is mandatory. Synthetic controls prove logic ONLY.
+M6 remains BLOCKED; no live acceptance record is claimed by this task.
 
 ## Related
 

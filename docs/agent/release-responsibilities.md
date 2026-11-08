@@ -13,13 +13,13 @@ Who does what for a TrayGoblin release. The step-by-step commands are in
 | Clean-tree proof (`git status --porcelain` empty) | Agent | An artifact that corresponds to the tag |
 | Deterministic validation | Agent | `cargo test --workspace`, clippy, `bash scripts/validate-toolchain.sh`, `bash scripts/check-docs.sh` all exit zero |
 | Installer verification | Agent | `pwsh -NoProfile -File scripts/test-installer.ps1` exits zero, with Windows-shortcut checks reported as skipped off Windows |
-| Annotated tag | Agent | `v<version>` pointing at the validated commit |
+| Annotated tag | Authorized release owner (parent) | Existing `v<version>` at clean accepted source; never replace |
 | Reproducible package and checksum | Agent | `dist/tray-goblin-<version>-windows-x86_64.zip` plus `.sha256` |
 | Checksum verification on Windows | Operator | `Get-FileHash` matches the published hash |
 | Install, interaction, and startup checks | Operator | Signed-off manual checklist |
 | Performance measurement | Operator | `scripts/measure-performance.ps1` passes on Windows 10/11 |
-| GitHub release entry and asset upload | Agent | Prerelease with notes, archive, and checksum |
-| Post-publish download verification | Agent | `sha256sum --check` reports `OK` |
+| GitHub release draft entry and asset upload | Authorized release owner (parent) | Actual draft with exact ZIP/checksum; optional manual Releases CI |
+| Public publishing and download verification | Authorized release owner (parent) | Both genuine M6 reports and complete digest-bound manual/Windows/review/operator acceptance admitted, explicitly requested mode, both permanent assets verified |
 | Withdrawal or rollback decision | Agent, on operator evidence | Deleted release and tag, or a new patch version |
 
 ## Gates
@@ -30,7 +30,9 @@ candidate, exact gate results, review/audit verdicts and next acceptance action.
 M1–M5 are accepted at implementation/compilation tier and remain unpublished;
 M6 actual Windows/WSL and resource evidence is BLOCKED. Optional CI/pushing code
 is user-approved, but the parent owns any push after offline gates and independent
-review. No CI1 author is authorized to stage/commit/push/tag/publish.
+review. No author is authorized to stage/commit/push/tag/dispatch/publish.
+Draft preparation is not public publishing or M6 acceptance; parent may prepare
+an actual owner-visible draft after local acceptance without waiving M6.
 A release advances only when the preceding gate is green.
 
 1. **Behaviour gate** — the deterministic suite and the cross-build pass. Nothing is tagged before
@@ -74,12 +76,31 @@ Local validation, the full manual attention demo and clean-tagged release remain
 authoritative and independent. Adding a hosted pipeline as a *release prerequisite*
 would violate [`specs/CONSTITUTION.md`](../../specs/CONSTITUTION.md). M6 remains required.
 
+The separate optional **Manual Releases** workflow is dispatch-only, draft-first.
+It requires an existing annotated tag/version and successful exact-SHA source build,
+promotes the same ZIP/checksum bytes (no rebuild/repack), and verifies downloads
+from the actual Release. Draft assets require owner/collaborator sign-in and persist
+independently of the 14-day Actions artifact. Public prerelease AND stable modes
+require complete genuine field/resource collector reports for that exact build/EXE
+AND a separate [complete acceptance record](../manual-release.md#complete-public-acceptance-record)
+before any public-mode Release mutation and again before publishing. It covers
+manual clean-tagged canonical validation/build, actual manual/CI ZIP+EXE byte
+equivalence, dated all-11 Windows 10 AND 11 x64 checklists, fresh independent
+spec/quality/rugged M6 coverage and explicit operator authorization. No generic
+passed flag or CI substitution. Resource NT version/build and same initial process
+provenance must match field metadata; performance is measured first.
+M6 remains blocked. Existing published/different drafts/assets are never rewritten.
+A matching owned draft can retry missing uploads; retain local/draft evidence on
+failure. See [exact instructions](../manual-release.md#optional-manual-releases-ci).
+
 ## Release notes must state
 
 - The tag and the commit SHA it points at
 - The archive SHA-256
-- Windows+WSL versions, real per-case observations/timings and working-set/CPU
-  numbers for the SAME executable SHA256/build identity/PID/path; no inferred results
+- For public releases: genuine M6 evidence binding and accepted field/resource
+  results for the SAME executable SHA256/build identity; never publish report contents
+- For drafts: untested/unpublished/M6, owner sign-in, unsigned local install/limitations;
+  no anonymous-download promise or implication of Windows validation
 - Known limitations: Windows x86-64 only, per-user install, unsigned, no auto-update,
   Copilot input unavailable, UNC may wake WSL, notifications may be suppressed
 

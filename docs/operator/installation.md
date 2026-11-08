@@ -15,12 +15,23 @@ Requirements:
 
 ## 1. Obtain the archive
 
-Official releases are built and published manually from a clean tagged commit;
-there is no auto-update. Local manual builds remain authoritative, with no CI
+Official releases identify a clean annotated tagged commit. Local manual release
+fallback and optional manually dispatched Releases CI are available; neither is a
+prerequisite. There is no auto-update. Local manual builds remain authoritative, with no CI
 prerequisite. Ways to get the archive:
 
 - Download `tray-goblin-0.1.0-windows-x86_64.zip` and its `.sha256` file from a published GitHub
   release for this repository, if one exists for the version you want.
+- Actual **draft Release**, if the owner has prepared one: owner/collaborator signs
+  in, opens **Releases**, selects the draft and downloads both ZIP and checksum
+  assets directly. These permanent assets persist independently of Actions
+  retention, but are UNPUBLISHED/untested, not anonymously downloadable promises.
+  Local draft preparation tests do not prove a live draft exists. M6 actual
+  Windows/WSL AND resource evidence plus complete dated Windows 10/11 x64
+  checklists, manual clean-tagged build/byte equivalence, independent M6 reviews
+  and operator acceptance block public prerelease/stable publication. Agents use
+  the [exact acceptance schema](../manual-release.md#complete-public-acceptance-record);
+  a draft or passing collector alone is not authorization.
 - Optional **test ZIP**, when available: sign in to GitHub, open this repository's
   **Actions → Windows test build**, select a successful main/manual run for the
   source commit you want, then download **tray-goblin-windows-x86_64** under
@@ -40,9 +51,11 @@ prerequisite. Ways to get the archive:
 
   The archive and checksum are written to `dist/`.
 
-No official release is published yet; no actual CI download is claimed until CI2
-verifies a GitHub run. See [`README.md`](../../README.md#project-status) for current
-status. If no test artifact is available, use the build-it-yourself path above.
+No public release is published yet. Optional test CI remains available; Releases
+CI is release preparation, not a claim of live draft/public publishing or Windows
+validation. See [`README.md`](../../README.md#project-status) for current status and
+[manual Releases instructions](../manual-release.md#optional-manual-releases-ci).
+If no accessible Release/test artifact exists, build locally as above.
 
 ## 2. Verify the checksum before extracting
 

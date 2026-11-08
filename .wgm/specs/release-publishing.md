@@ -23,7 +23,8 @@ without an actual Release record/assets does not satisfy this spec.
 - `.github/workflows/release.yml`, workflow_dispatch ONLY; never auto-publish on
   main pushes, PR/fork events or schedules. Inputs: existing tag, successful source
   build run ID, mode draft/prerelease/stable (default draft), and optional repository
-  field/performance report paths for publish modes. All inputs passed as data/env,
+  `field_evidence`/`performance_evidence`/`acceptance_evidence` paths (all three
+  mandatory for either public mode). All inputs passed as data/env,
   never injected into shell code. Preserve existing read-only test-build workflow.
 - Pin official checkout action SHA; credentials not persisted; fetch enough Git
   history/tags for peeled commit verification. Single bounded job/concurrency per
@@ -58,8 +59,27 @@ CPU with raw pass flags. No synthetic/mocked/local CI proxy can satisfy M6.
 Read reports as bounded data, not executable code; never log path/user/process
 report contents. Paths stay inside explicit evidence area, no symlink/traversal.
 Evidence may be committed on the dispatch source branch AFTER immutable release
-tag; its buildSha must still match the tag/asset source. Document exact collection
-and placement; fake fixture evidence is used ONLY in offline gate tests, never live.
+tag; its buildSha must still match the tag/asset source. BOTH public modes also
+require a bounded trusted complete acceptance record before Release mutation and
+again before publish: full dated manual Windows checklist (installer/Startup/
+sign-in/uninstall and all other required items), supported target OS observations,
+exact-source manual clean-tagged canonical validation/reproducibility, and fresh
+independent M6 plus operator acceptance. Bind tag/build-run/source/archive/EXE and
+collector report digests. Mere passed:true/reviewer identity is insufficient;
+absent/partial/failing/non-independent/mismatched evidence rejects. Performance
+provenance must establish Windows10/11 major10 and agree with field host metadata.
+The live verifier separately binds approved dispatch source (main/canonical SHA/
+workflow) and inspected runID; unrelated in-flight/failing dispatches do not block
+matching successful draft proof. The concrete `tray-goblin-acceptance-v1` schema
+and creation/placement are in `docs/manual-release.md#complete-public-acceptance-record`:
+actual manual ZIP/checksum bytes, ordered dated canonical-source command/results
+with result digests, both targets' all-11 observation facets, fresh three-lane
+independent M6 coverage and explicit operator authorization. Record/report JSON
+is <=256KiB, manual ZIP <100MiB; evidence digest changes reject on recheck.
+Measure resources before field restart/Quit to bind initial PID/path/start/NTbuild.
+Live discovery pins clean local main/origin/main and actual remote main/workflow
+ID, paginates successful completed candidates first, polls120s, never watches
+unproven unrelated jobs. Document exact collection and placement; fake fixture evidence is used ONLY in offline gate tests, never live.
 M6 remains blocked, so live validation creates draft only, not public publishing.
 
 ## Exact acceptance/backpressure

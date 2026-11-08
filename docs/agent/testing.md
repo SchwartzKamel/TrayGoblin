@@ -84,6 +84,50 @@ pi-host/model, interactive Windows/WSL or performance behavior. Offline verifier
 stubs do not prove a downloadable GitHub asset; CI2 owns that live boundary.
 See [Development](development.md#optional-ci-test-builds).
 
+## Optional release controls
+
+REL1's exact local gate (actionlint/PyYAML are tooling only):
+
+```bash
+actionlint .github/workflows/release.yml && python3 scripts/test-release-workflow.py && python3 scripts/publish-release.py --self-test && python3 scripts/test-ci-workflow.py && bash scripts/check-docs.sh && bash scripts/validate-toolchain.sh
+```
+
+Use synthetic fixtures/isolated HOME and verified public compiler caches. The
+self-test runs controlled gh/Git stubs with real ZIP/PE fixture bytes, mandatory
+case removal, contradictory field/performance reports, protected published/draft
+mutations and interrupted second-upload/retry controls. Fake positive JSON checks
+schema only: it is NEVER live publication evidence. A 2-second offline deadline
+must fail within 7 seconds, retain owned partial/draft evidence and caller sentinel;
+retry uses a NEW child without clobbering unknown files. Publisher deadlines remain
+120 discovery, 1500 watch, 120 download/upload, kill-after 5 seconds. The read-only
+Release verifier polls completed successful candidates across all bounded pages
+for 120 seconds; it never watches an unrelated in-flight dispatch.
+
+REL2's separate real, read-only owner download boundary (run only after authorized
+parent push/manual annotated tag/source build/DRAFT dispatch):
+
+```bash
+bash scripts/verify-release.sh --repo SchwartzKamel/TrayGoblin --tag v0.1.0 --draft
+```
+
+This discovers an actual successful release.yml run, actual draft Release ID/URL
+and both permanent assets, verifies tag/source/manifest/17 entries/GUI PE/digests,
+and retains sanitized evidence in a new child of `.wgm/release-downloads`.
+It is not an Actions artifact link and does not dispatch/create/publish/tag.
+M6 remains blocked: actual Windows/WSL field AND same-EXE performance collection
+below are required for BOTH public modes. A separate
+[complete acceptance record](../manual-release.md#complete-public-acceptance-record)
+is required before any public-mode Release mutation and rechecked before publish:
+actual manual clean-tagged canonical validation/build and CI byte equivalence,
+all 11 dated checklist items on BOTH Windows 10/11 x64 targets, distinct fresh
+independent M6 review coverage and explicit operator acceptance. Negative controls
+remove each checklist item on each target, fail installer/Startup/uninstall,
+validation/reviews/bindings/digests, change evidence before publish and manual ZIP
+bytes, and falsify unsupported/mismatched OS/host provenance in both modes.
+Separate verifier controls reject copied logs from non-main/wrong SHA/ID/workflow
+and prove unrelated-running-first and paginated matching success without watch.
+See [collection and placement](../manual-release.md#optional-manual-releases-ci).
+
 ## Fixture journeys (historical MVP contract)
 
 These six-field probe expectations remain historical MVP compatibility checks,
@@ -209,6 +253,14 @@ $tg = Join-Path $env:LOCALAPPDATA 'Programs\TrayGoblin'
 pwsh -NoProfile -File "$tg\resources\measure-performance.ps1" -Path "$tg\tray-goblin.exe" -DurationSeconds 30 -JsonPath perf.json
 if ($LASTEXITCODE -ne 0) { throw 'Actual performance gate failed' }
 ```
+
+For public acceptance, run this performance collector BEFORE the field collector
+on the SAME initial PID/path/processStartUtc: the field journey restarts/quits the
+process. Match full NT major-10 version/build to field Windows metadata; Windows
+7 or different build/process provenance is rejected. Preserve the current rounded
+presentation metrics AND unrounded-comparison pass flags (the collector does not
+emit raw byte/CPU counters). Record this measurement plus the all-11 checklist on
+both supported Windows targets in the separate acceptance record above.
 
 The script samples the running process for the window, fails when peak working set exceeds 50 MB or
 average CPU exceeds 5% of total capacity, and writes a content-free JSON report. Run it on an

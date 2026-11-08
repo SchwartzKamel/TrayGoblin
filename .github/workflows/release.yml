@@ -1,0 +1,70 @@
+name: Manual Releases
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing annotated tag (for example v0.1.0)
+        required: true
+        type: string
+      build_run_id:
+        description: Successful Windows test build run ID for the tag commit
+        required: true
+        type: string
+      mode:
+        description: Draft preparation or gated public publishing
+        required: true
+        type: choice
+        default: draft
+        options: [draft, prerelease, stable]
+      field_evidence:
+        description: Actual collector JSON under .wgm/release-evidence/ (public modes)
+        required: false
+        type: string
+        default: ''
+      performance_evidence:
+        description: Matching Windows process JSON under .wgm/release-evidence/
+        required: false
+        type: string
+        default: ''
+      acceptance_evidence:
+        description: Complete manual build and Windows M6 acceptance JSON under .wgm/release-evidence/
+        required: false
+        type: string
+        default: ''
+permissions: {}
+concurrency:
+  group: release-${{ inputs.tag }}
+  cancel-in-progress: false
+jobs:
+  release:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    permissions:
+      contents: write
+      actions: read
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout trusted dispatch source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          fetch-tags: true
+      - name: Prepare or publish verified Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          RELEASE_BUILD_RUN_ID: ${{ inputs.build_run_id }}
+          RELEASE_MODE: ${{ inputs.mode }}
+          RELEASE_FIELD_EVIDENCE: ${{ inputs.field_evidence }}
+          RELEASE_PERFORMANCE_EVIDENCE: ${{ inputs.performance_evidence }}
+          RELEASE_ACCEPTANCE_EVIDENCE: ${{ inputs.acceptance_evidence }}
+          RELEASE_OUT_ROOT: ${{ runner.temp }}/tray-goblin-releases
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          set -euo pipefail
+          python3 scripts/publish-release.py
