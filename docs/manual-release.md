@@ -13,7 +13,11 @@ Root MVP plans are historical. See [Release responsibilities](agent/release-resp
 
 Stable Rust, MinGW-w64 and `x86_64-pc-windows-gnu`; Node with installed pi1.4.0;
 PowerShell, Podman with cached Debian bookworm-slim, `zip`, `unzip`, `sha256sum`,
-`file`, Git and (only when separately authorized to publish) authenticated `gh`.
+`file`, Git, Python 3.11+ (`tomllib`), GNU coreutils/`timeout`, plus tooling-only
+PyYAML/actionlint for optional controls. Use the one bounded
+[release-tool provisioning/offline-check recipe](agent/development.md#release-tool-prerequisites),
+including `gh` installation; authenticated `gh` is needed only for separately
+authorized live inspection/publication, not offline checks.
 Optional read-only Actions test ZIPs are not releases or prerequisites; local
 manual validation/build/package remains authoritative. See
 [Release responsibilities](agent/release-responsibilities.md#optional-ci-never-a-release-prerequisite).
@@ -344,16 +348,32 @@ read-only source run checks do not require the original artifact to remain unexp
 after Release creation. `resources/build.json`'s published=false means BUILD TIME;
 never edit/repack it to claim publication.
 
-**Future public prerelease/stable:** use the exact permanent draft ZIP on actual
-Windows 10/11 + local WSL. Verify/install as a standard user, explicitly configure
-native+WSL pi/Copilot sources, then run both exact Step 8 collector commands against
-the installed executable. Include Startup/sign-in/uninstall operator checks and
-fresh independent M6 acceptance. Both reports must have the peeled build SHA,
-clean worktree flag and SHA256 of that downloaded EXE. Do not rebuild after measuring.
+**Current v0.1.0 is DRAFT-ONLY:** its `mode=draft` ownership cannot be promoted by
+same-tag public retry or UI. Current draft field work is exploratory, NOT acceptance
+for a different future version. Preserve the immutable current tag/build/assets.
+
+**Future public prerelease/stable:** requires a separately authorized NEW version,
+annotated tag and exact-source CI test build, actual same-payload manual/CI ZIP AND
+EXE byte equivalence, and fresh real Windows 10+11/M6/performance/independent/operator
+records bound to THAT version. Before initially dispatching that version in a
+public mode, obtain its actual verified CI **test archive**, verify/install as a
+standard user on actual Windows 10/11 + local WSL, explicitly configure native+WSL
+pi/Copilot sources, then run both exact Step 8 collector commands against the
+installed executable (performance FIRST, same initial PID/path/processStartUtc).
+Include ALL 11 checklist items/facets on BOTH targets, Startup/sign-in/uninstall,
+and fresh independent M6 acceptance. Public-mode evidence is required BEFORE ANY
+draft mutation: do NOT prepare `mode=draft` first and promise later promotion.
+Both original reports bind the new peeled build SHA, clean flag and downloaded EXE
+digest. Do not rebuild after measuring; a manual/CI byte mismatch blocks admission.
 
 Place the original collector JSON (no report editing, pass autofill or fake fixtures)
-in `.wgm/release-evidence/v0.1.0/field.json` and
-`.wgm/release-evidence/v0.1.0/performance.json` on trusted dispatch main. Reports
+under `.wgm/release-evidence/<NEW-version>/field.json` and
+`.wgm/release-evidence/<NEW-version>/performance.json` on trusted dispatch main
+(replace `<NEW-version>` with the actual version, never a literal placeholder).
+The v0.1.0 literal paths/schema/command fences below are version-substitution
+examples, NOT current-draft public permission: collect fresh paths, tag/sourceRun,
+source SHA, archive/EXE/report digests and dated records, never carry forward
+current tag/build/reports. Reports
 may be committed AFTER the immutable release tag; the report buildSha still binds
 the tag, not dispatch HEAD. The owner reviews actual collection provenance and
 privacy before placing files: no real sessions, auth/config/conversation data or
@@ -375,16 +395,33 @@ Release mutation. Offline fake reports are only shape/negative controls, never M
 Only after genuine M6 acceptance and explicit public authorization, dispatch main
 with mode `prerelease` (or `stable`) and inputs `field_evidence`,
 `performance_evidence` and `acceptance_evidence` set to the exact repository paths
-specified here and below; tag and source build run inputs remain unchanged. Both modes first prepare/verify a draft, then
+for that NEW version. Freeze that request's tag/source build run/mode/evidence
+bindings; only matching retries of that same request keep them unchanged. Both
+public modes first prepare/verify their own matching draft AFTER admission, then
 perform the single publish call. A previously prepared mode=draft record is NOT a
 public-mode retry: mode/notes/evidence ownership must match. Do not rewrite it to
-promote; plan a separately authorized new version/draft after M6, never bypass this
-fail-closed boundary via UI. Public assets are anonymously downloadable only AFTER
+promote, and never bypass this fail-closed boundary via UI. Public assets are anonymously downloadable only AFTER
 confirmed publishing, unlike drafts. Neither public mode is run by this author task.
 
-**Recovery:** retain the owned local child, sanitized command exits, ownership/notes
-and actual draft on API/upload failure. No success URL is emitted until BOTH
-permanent assets match. Rerun the SAME tag/run/mode/evidence only for a matching
+**Recovery:** check invocation syntax/help first (`python3 scripts/publish-release.py --help`
+or `bash scripts/verify-release.sh --help`). Pre-allocation argument validation may
+create NO owned directory; inspect the printed owned path only when allocated.
+A local publisher/verifier child at the chosen out-root is durable: retain it,
+sanitized commands/exits and ownership/notes on API/upload failure. The hosted
+publisher child is under `runner.temp`, ephemeral and **NOT exported** by
+`release.yml`; do not promise scratch retention or post-job retrieval.
+
+For hosted failures preserve accessible failed Actions logs and command/job exits
+(`gh run view RUN_ID --repo SchwartzKamel/TrayGoblin --log-failed`, with its CLI
+exit, and read-only `gh run view RUN_ID --repo SchwartzKamel/TrayGoblin --json status,conclusion,headSha,url`).
+Before retry, inspect/save read-only run/source and draft/assets state with
+`gh api repos/SchwartzKamel/TrayGoblin/actions/runs/RUN_ID`,
+`gh api repos/SchwartzKamel/TrayGoblin/releases/RELEASE_ID` and
+`gh api repos/SchwartzKamel/TrayGoblin/releases/RELEASE_ID/assets` (actual numeric
+IDs; authorized access only, sanitize private data). Compare tag/commit/title/body/
+mode/ownership/digests against the SAME request before retry. The recorded first
+hosted failure's narrower cause remains **UNKNOWN**; generic failure logs do not
+prove a first cause. No success URL is emitted until BOTH permanent assets match. Rerun the SAME tag/run/mode/evidence only for a matching
 owned draft; missing uploads resume into a NEW local child. Published releases,
 unknown/different drafts/assets, tag changes or changed notes/digests/mode are
 refused; no clobber/delete/rewrite. Inspect an incomplete server-side upload with
@@ -401,6 +438,10 @@ Draft mode does not read or require it.
 ### Creation and placement
 
 Only the authorized owner creates real acceptance; this author task does not.
+For future public admission every v0.1.0 literal below must be substituted with the
+separately authorized NEW version and its fresh collection paths/identities, as
+specified above. Obtain that version's verified CI test bytes and finish the real
+records BEFORE its first public-mode dispatch, never via a draft-mode promotion.
 
 1. Before evidence commits, freeze/tag accepted canonical main as Steps 1–5 require.
    In a clean checkout with canonical origin/main at that same commit, detach to

@@ -86,7 +86,10 @@ See [Development](development.md#optional-ci-test-builds).
 
 ## Optional release controls
 
-REL1's exact local gate (actionlint/PyYAML are tooling only):
+REL1's exact local gate (actionlint/PyYAML are tooling only): first use the bounded
+[release-tool provisioning/offline-check recipe](development.md#release-tool-prerequisites)
+for Python 3.11+, GNU coreutils/timeout, gh and those tools; provisioning needs
+separate operator authorization, never installs/downloads in this gate.
 
 ```bash
 actionlint .github/workflows/release.yml && python3 scripts/test-release-workflow.py && python3 scripts/publish-release.py --self-test && python3 scripts/test-ci-workflow.py && bash scripts/check-docs.sh && bash scripts/validate-toolchain.sh
@@ -114,6 +117,12 @@ This discovers an actual successful release.yml run, actual draft Release ID/URL
 and both permanent assets, verifies tag/source/manifest/17 entries/GUI PE/digests,
 and retains sanitized evidence in a new child of `.wgm/release-downloads`.
 It is not an Actions artifact link and does not dispatch/create/publish/tag.
+On failure check syntax/help first: pre-allocation argument errors may create NO
+owned directory. Inspect a printed owned path only if allocation occurred. Local
+verifier children are durable at the chosen out-root; hosted publisher runner.temp
+children are ephemeral and NOT exported by the workflow. Preserve accessible
+Actions logs/exits and read-only run/draft/asset state before a matching retry;
+see [Recovery](../manual-release.md#optional-manual-releases-ci).
 M6 remains blocked: actual Windows/WSL field AND same-EXE performance collection
 below are required for BOTH public modes. A separate
 [complete acceptance record](../manual-release.md#complete-public-acceptance-record)

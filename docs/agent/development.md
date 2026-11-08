@@ -30,6 +30,47 @@ or offline-gate step. Installed host and cached image must already exist.
 Under isolated HOME select verified public Podman root/runroot explicitly, not
 credential/user-config mounts. The gate never pulls or enables network.
 
+## Release-tool prerequisites
+
+For the optional CI/release controls and read-only verifiers, provision Python
+**3.11+** (`tomllib`), PyYAML, actionlint, GNU coreutils (`timeout`, `sha256sum`),
+and GitHub CLI (`gh`). These are **tooling-only**, not application dependencies.
+Use the existing Rust/MinGW/archive tools above for the full gate.
+
+Online provisioning requires **SEPARATE operator authorization**; never run it in
+an offline gate. Install Python from [official Python downloads](https://www.python.org/downloads/),
+then install PyYAML with `python3 -m pip install PyYAML` in the operator-selected
+tooling environment (not system Python if externally managed). Follow the exact
+[official actionlint installation instructions](https://github.com/rhysd/actionlint/blob/main/docs/install.md),
+[GitHub CLI installation instructions](https://github.com/cli/cli#installation).
+On Debian/Ubuntu, GNU coreutils installation is `sudo apt-get install coreutils`
+(operator-authorized tooling setup only, not a runtime elevation requirement).
+Make these tools and the public YAML module visible in the synthetic environment;
+never mount credentials or real user configuration to make checks pass.
+
+Run this whole **offline availability/version/import check**, with isolated
+HOME/USERPROFILE/XDG/pi paths and verified public tool caches as in Testing:
+
+```bash
+(
+  set -euo pipefail
+  for tool in python3 actionlint timeout sha256sum gh; do
+    command -v "$tool" >/dev/null || exit $?
+  done
+  python3 -c 'import sys, tomllib, yaml; assert sys.version_info >= (3, 11), "Python 3.11+ required"; print(sys.version.split()[0], "tomllib", "PyYAML", yaml.__version__)' || exit $?
+  actionlint -version || exit $?
+  timeout --version || exit $?
+  sha256sum --version || exit $?
+  gh --version || exit $?
+)
+```
+
+This check does not authenticate or contact GitHub. Only for separately authorized
+live inspection, the operator checks `gh auth status` and read-only
+`gh api repos/SchwartzKamel/TrayGoblin --jq .permissions` in their authorized
+profile. Keep credentials and private output out of offline profiles/evidence;
+a tool-version check alone proves neither authentication nor repository access.
+
 ## First commands
 
 ```bash
@@ -89,7 +130,8 @@ bash scripts/verify-ci-build.sh --self-test
 ```
 
 After a separately authorized push, CI2 verifies the **actual** exact-SHA run and
-download (requires authenticated `gh`, Python 3 and GNU `timeout`):
+download (requires authenticated `gh`, Python 3.11+ and GNU `timeout`; see
+[release-tool prerequisites](#release-tool-prerequisites)):
 
 ```bash
 bash scripts/verify-ci-build.sh --repo SchwartzKamel/TrayGoblin --commit "$(git rev-parse HEAD)" --out-root .wgm/ci-downloads
@@ -112,6 +154,8 @@ GitHub Release DRAFT, uploads both files, then downloads permanent assets to che
 both digests. It never creates/moves tags, rebuilds, repacks or clobbers assets.
 Matching owned partial drafts can resume into new local children; errors preserve
 local evidence/draft and never emit a success URL. Published/different drafts fail.
+Hosted runner scratch is ephemeral and not exported; see
+[recovery and pre-allocation errors](../manual-release.md#optional-manual-releases-ci).
 
 Public prerelease/stable modes require full actual M6 reports AND separate bounded
 `acceptance_evidence` before any Release mutation, rechecked before publishing.

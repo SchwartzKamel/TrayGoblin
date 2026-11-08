@@ -15,8 +15,17 @@ No waiver of M6, stable promotion, tag replacement or published-asset replacemen
 ## Smallest end-to-end / magic moment
 Manually dispatch Releases for an existing validated tag and successful test-build
 run. The workflow creates a draft GitHub Release with permanent ZIP/SHA assets;
-owner can open Releases and download exact bytes. Later verified Windows evidence
-allows explicitly requested prerelease/stable publishing. A green Actions upload
+owner can open Releases and download exact bytes. Current mode=draft v0.1.0 is
+DRAFT-ONLY: no same-tag public retry or UI promotion. Current draft field work is
+exploratory, not acceptance for a different future version. Future public publishing
+requires a separately authorized NEW version/tag/exact-source CI test build and
+actual manual/CI ZIP AND EXE byte equivalence, plus fresh real Windows10+11 all-11,
+M6/performance/independent/operator records bound to that version. Collect M6 from
+that version's actual verified CI test archive BEFORE its first public-mode
+dispatch (admission precedes any draft mutation), not by preparing mode=draft and
+promising promotion. Version-substitution examples in Manual release do not carry
+forward current tag/build/reports or grant current-draft public permission.
+A green Actions upload
 without an actual Release record/assets does not satisfy this spec.
 
 ## Workflow boundary
@@ -96,7 +105,12 @@ Production discovery120s, watch1500s, download/upload120s kill-after5; CLI API e
 must propagate. Offline self-test2s test-only interruption returns failure<=7s,
 keeps owned partial directory/draft asset evidence, never mutates published state,
 then resumes only matching owned draft into new local child; caller sentinel stays
-unchanged. Missing-second-asset/corrupt ZIP/SHA/wrong-run/wrong-tag/unpeeled tag/
+unchanged. Local children are durable at the chosen out-root; hosted runner.temp
+scratch is ephemeral and NOT exported. Preserve accessible failed Actions logs/
+exits and inspect read-only run/draft/assets before the SAME matching retry;
+no hosted-scratch retrieval or narrower first-cause claim (recorded cause UNKNOWN).
+Pre-allocation argument errors may create NO child: check syntax/help first, then
+inspect the printed owned path only if allocated. See Manual release Recovery. Missing-second-asset/corrupt ZIP/SHA/wrong-run/wrong-tag/unpeeled tag/
 expired artifact/source mismatch/token echo/traversal/evidence mismatch tests fail.
 Draft or permanent success URL is emitted only after BOTH downloaded assets verify.
 No arbitrary tag as shell, body templates passed by file. Secret environment values
