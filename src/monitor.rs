@@ -736,6 +736,204 @@ fn active_lock_identity(directory: &Path) -> io::Result<Option<String>> {
     Ok(lock)
 }
 
+// Controllers can outlive ANY parser, source cache, worker or monitor. IDs must
+// therefore be opaque and non-recycling for the whole process, not per session.
+static COPILOT_EPISODES: AtomicU64 = AtomicU64::new(0);
+
+fn allocate_copilot_episode(sequence: &AtomicU64) -> Result<u64, Diagnostic> {
+    sequence
+        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |last| {
+            last.checked_add(1)
+        })
+        .map(|previous| previous + 1)
+        .map_err(|_| Diagnostic::EpisodeIdentityExhausted)
+}
+
+struct CopilotSession {
+    lock: String,
+    offset: u64,
+    baseline: Option<u64>,
+    discarding: bool,
+    state: SessionState,
+    model: Option<String>,
+    directory: Option<String>,
+    attention: Option<AttentionEpisode>,
+    run_started_at: Option<u64>,
+    duration: Option<u64>,
+    event_file_identity: Option<String>,
+}
+
+impl Default for CopilotSession {
+    fn default() -> Self {
+        Self {
+            lock: String::new(),
+            offset: 0,
+            baseline: None,
+            discarding: false,
+            state: SessionState::Idle,
+            model: None,
+            directory: None,
+            attention: None,
+            run_started_at: None,
+            duration: None,
+            event_file_identity: None,
+        }
+    }
+}
+
+fn file_identity(metadata: &fs::Metadata) -> io::Result<String> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        Ok(format!("{}:{}", metadata.dev(), metadata.ino()))
+    }
+    #[cfg(not(unix))]
+    {
+        let created = metadata
+            .created()?
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .map_err(io::Error::other)?
+            .as_nanos();
+        Ok(created.to_string())
+    }
+}
+
+impl CopilotSession {
+    fn poll(
+        &mut self,
+        directory: &Path,
+        clock: &dyn Fn() -> u64,
+        lines: &mut u64,
+        result: &mut SourceSnapshot,
+    ) -> io::Result<()> {
+        self.directory = None;
+        match read_bounded_regular(&directory.join(WORKSPACE_FILE_NAME), MAX_WORKSPACE_BYTES) {
+            Ok(bytes) => match std::str::from_utf8(&bytes)
+                .ok()
+                .and_then(|s| parse_workspace_metadata(s).ok())
+            {
+                Some(metadata) => {
+                    self.directory = metadata
+                        .active_directory
+                        .map(|p| p.to_string_lossy().into_owned())
+                        .filter(|s| bounded_identity(s, 2048));
+                }
+                None => result.diagnose(Diagnostic::InvalidWorkspace),
+            },
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+            Err(_) => result.diagnose(Diagnostic::InvalidWorkspace),
+        }
+        let mut file = open_regular(&directory.join(EVENTS_FILE_NAME))?;
+        let metadata = file.metadata()?;
+        let length = metadata.len();
+        let identity = file_identity(&metadata)?;
+        if length < self.offset
+            || self
+                .event_file_identity
+                .as_ref()
+                .is_some_and(|id| id != &identity)
+        {
+            let lock = self.lock.clone();
+            let directory = self.directory.take();
+            *self = Self {
+                lock,
+                directory,
+                ..Self::default()
+            };
+        }
+        self.event_file_identity = Some(identity);
+        let baseline = *self.baseline.get_or_insert(length);
+        file.seek(SeekFrom::Start(self.offset))?;
+        let mut bytes = Vec::new();
+        file.take(MAX_EVENT_READ as u64).read_to_end(&mut bytes)?;
+        let now = clock();
+        let mut start = 0;
+        for (index, byte) in bytes.iter().enumerate() {
+            if *byte != b'\n' {
+                continue;
+            }
+
+            let historical = self.offset + (start as u64) < baseline;
+            if self.discarding {
+                self.discarding = false;
+                result.diagnose(Diagnostic::OversizedEvent);
+            } else {
+                *lines += 1;
+                match std::str::from_utf8(&bytes[start..index])
+                    .ok()
+                    .map(parse_event_line)
+                {
+                    Some(ParsedEvent::Known(event)) => {
+                        let future = event.timestamp.is_some_and(|t| {
+                            u64::try_from(t.timestamp_millis()).map_or(true, |time| time > now)
+                        });
+                        if future {
+                            result.diagnose(Diagnostic::MalformedEvent);
+                        } else {
+                            self.apply(event, !historical).map_err(|diagnostic| {
+                                result.diagnose(diagnostic);
+                                io::Error::other("Copilot error identity exhausted")
+                            })?;
+                        }
+                    }
+                    Some(ParsedEvent::Unsupported) => {}
+                    _ => result.diagnose(Diagnostic::MalformedEvent),
+                }
+            }
+            start = index + 1;
+        }
+        if start == 0 && bytes.len() == MAX_EVENT_READ {
+            self.discarding = true;
+            self.offset += bytes.len() as u64;
+            result.diagnose(Diagnostic::OversizedEvent);
+        } else {
+            self.offset += start as u64;
+        }
+        Ok(())
+    }
+
+    fn apply(&mut self, event: SessionEvent, notify: bool) -> Result<(), Diagnostic> {
+        let timestamp = event
+            .timestamp
+            .and_then(|t| u64::try_from(t.timestamp_millis()).ok());
+        match event.kind {
+            EventKind::TurnStart => {
+                self.state = SessionState::Working;
+                self.run_started_at = timestamp;
+                self.attention = None;
+            }
+            EventKind::TurnEnd => {
+                self.duration = self
+                    .run_started_at
+                    .zip(timestamp)
+                    .and_then(|(start, end)| end.checked_sub(start));
+                self.run_started_at = None;
+                if self.attention.is_none() {
+                    self.state = SessionState::Idle;
+                }
+            }
+            EventKind::SessionError => {
+                let id = allocate_copilot_episode(&COPILOT_EPISODES)?;
+                self.state = SessionState::Error;
+                self.attention = Some(AttentionEpisode {
+                    id,
+                    reason: EpisodeReason::SessionError,
+                    notify,
+                });
+            }
+            EventKind::ModelChange | EventKind::AssistantMessage => {
+                if let Some(model) = event.model {
+                    if bounded_identity(&model, 128) {
+                        self.model = Some(model);
+                    }
+                }
+            }
+            EventKind::ToolExecutionComplete => {}
+        }
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod attention_io_tests {
     use super::*;
@@ -1042,203 +1240,5 @@ mod attention_io_tests {
         );
         drop(directory);
         fs::remove_dir_all(root).unwrap();
-    }
-}
-
-// Controllers can outlive ANY parser, source cache, worker or monitor. IDs must
-// therefore be opaque and non-recycling for the whole process, not per session.
-static COPILOT_EPISODES: AtomicU64 = AtomicU64::new(0);
-
-fn allocate_copilot_episode(sequence: &AtomicU64) -> Result<u64, Diagnostic> {
-    sequence
-        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |last| {
-            last.checked_add(1)
-        })
-        .map(|previous| previous + 1)
-        .map_err(|_| Diagnostic::EpisodeIdentityExhausted)
-}
-
-struct CopilotSession {
-    lock: String,
-    offset: u64,
-    baseline: Option<u64>,
-    discarding: bool,
-    state: SessionState,
-    model: Option<String>,
-    directory: Option<String>,
-    attention: Option<AttentionEpisode>,
-    run_started_at: Option<u64>,
-    duration: Option<u64>,
-    event_file_identity: Option<String>,
-}
-
-impl Default for CopilotSession {
-    fn default() -> Self {
-        Self {
-            lock: String::new(),
-            offset: 0,
-            baseline: None,
-            discarding: false,
-            state: SessionState::Idle,
-            model: None,
-            directory: None,
-            attention: None,
-            run_started_at: None,
-            duration: None,
-            event_file_identity: None,
-        }
-    }
-}
-
-fn file_identity(metadata: &fs::Metadata) -> io::Result<String> {
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::MetadataExt;
-        Ok(format!("{}:{}", metadata.dev(), metadata.ino()))
-    }
-    #[cfg(not(unix))]
-    {
-        let created = metadata
-            .created()?
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .map_err(io::Error::other)?
-            .as_nanos();
-        Ok(created.to_string())
-    }
-}
-
-impl CopilotSession {
-    fn poll(
-        &mut self,
-        directory: &Path,
-        clock: &dyn Fn() -> u64,
-        lines: &mut u64,
-        result: &mut SourceSnapshot,
-    ) -> io::Result<()> {
-        self.directory = None;
-        match read_bounded_regular(&directory.join(WORKSPACE_FILE_NAME), MAX_WORKSPACE_BYTES) {
-            Ok(bytes) => match std::str::from_utf8(&bytes)
-                .ok()
-                .and_then(|s| parse_workspace_metadata(s).ok())
-            {
-                Some(metadata) => {
-                    self.directory = metadata
-                        .active_directory
-                        .map(|p| p.to_string_lossy().into_owned())
-                        .filter(|s| bounded_identity(s, 2048));
-                }
-                None => result.diagnose(Diagnostic::InvalidWorkspace),
-            },
-            Err(error) if error.kind() == io::ErrorKind::NotFound => {}
-            Err(_) => result.diagnose(Diagnostic::InvalidWorkspace),
-        }
-        let mut file = open_regular(&directory.join(EVENTS_FILE_NAME))?;
-        let metadata = file.metadata()?;
-        let length = metadata.len();
-        let identity = file_identity(&metadata)?;
-        if length < self.offset
-            || self
-                .event_file_identity
-                .as_ref()
-                .is_some_and(|id| id != &identity)
-        {
-            let lock = self.lock.clone();
-            let directory = self.directory.take();
-            *self = Self {
-                lock,
-                directory,
-                ..Self::default()
-            };
-        }
-        self.event_file_identity = Some(identity);
-        let baseline = *self.baseline.get_or_insert(length);
-        file.seek(SeekFrom::Start(self.offset))?;
-        let mut bytes = Vec::new();
-        file.take(MAX_EVENT_READ as u64).read_to_end(&mut bytes)?;
-        let now = clock();
-        let mut start = 0;
-        for (index, byte) in bytes.iter().enumerate() {
-            if *byte != b'\n' {
-                continue;
-            }
-
-            let historical = self.offset + (start as u64) < baseline;
-            if self.discarding {
-                self.discarding = false;
-                result.diagnose(Diagnostic::OversizedEvent);
-            } else {
-                *lines += 1;
-                match std::str::from_utf8(&bytes[start..index])
-                    .ok()
-                    .map(parse_event_line)
-                {
-                    Some(ParsedEvent::Known(event)) => {
-                        let future = event.timestamp.is_some_and(|t| {
-                            u64::try_from(t.timestamp_millis()).map_or(true, |time| time > now)
-                        });
-                        if future {
-                            result.diagnose(Diagnostic::MalformedEvent);
-                        } else {
-                            self.apply(event, !historical).map_err(|diagnostic| {
-                                result.diagnose(diagnostic);
-                                io::Error::other("Copilot error identity exhausted")
-                            })?;
-                        }
-                    }
-                    Some(ParsedEvent::Unsupported) => {}
-                    _ => result.diagnose(Diagnostic::MalformedEvent),
-                }
-            }
-            start = index + 1;
-        }
-        if start == 0 && bytes.len() == MAX_EVENT_READ {
-            self.discarding = true;
-            self.offset += bytes.len() as u64;
-            result.diagnose(Diagnostic::OversizedEvent);
-        } else {
-            self.offset += start as u64;
-        }
-        Ok(())
-    }
-
-    fn apply(&mut self, event: SessionEvent, notify: bool) -> Result<(), Diagnostic> {
-        let timestamp = event
-            .timestamp
-            .and_then(|t| u64::try_from(t.timestamp_millis()).ok());
-        match event.kind {
-            EventKind::TurnStart => {
-                self.state = SessionState::Working;
-                self.run_started_at = timestamp;
-                self.attention = None;
-            }
-            EventKind::TurnEnd => {
-                self.duration = self
-                    .run_started_at
-                    .zip(timestamp)
-                    .and_then(|(start, end)| end.checked_sub(start));
-                self.run_started_at = None;
-                if self.attention.is_none() {
-                    self.state = SessionState::Idle;
-                }
-            }
-            EventKind::SessionError => {
-                let id = allocate_copilot_episode(&COPILOT_EPISODES)?;
-                self.state = SessionState::Error;
-                self.attention = Some(AttentionEpisode {
-                    id,
-                    reason: EpisodeReason::SessionError,
-                    notify,
-                });
-            }
-            EventKind::ModelChange | EventKind::AssistantMessage => {
-                if let Some(model) = event.model {
-                    if bounded_identity(&model, 128) {
-                        self.model = Some(model);
-                    }
-                }
-            }
-            EventKind::ToolExecutionComplete => {}
-        }
-        Ok(())
     }
 }
